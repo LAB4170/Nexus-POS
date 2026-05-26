@@ -48,34 +48,46 @@ const requireBusinessAuth = async (req, res, next) => {
 
     const token = authHeader.split('Bearer ')[1];
     
-    if (!isFirebaseInitialized) {
-      console.warn('⚠️ Authentication bypassed/limited: Firebase Admin not initialized.');
-      // In development, we might want to allow access with a mock email if provided via header
+    // Handle Firebase initialization
+  if (!isFirebaseInitialized) {
+    console.warn('⚠️ Authentication bypassed/limited: Firebase Admin not initialized.');
+    const isLocalDev = process.env.NODE_ENV === 'development' || !process.env.RENDER;
+    if (isLocalDev) {
+      // Use deterministic dev email for testing
+      userEmail = 'dev_user@example.com';
+      req.user = { uid: 'dev-bypass-uid', email: userEmail };
+      req.userEmail = userEmail; // Added for downstream middleware
+      console.warn(`🛠️ Dev Auth Bypass active for: ${userEmail}`);
+    } else {
       const userEmailHeader = req.headers['x-user-email'];
-      const isLocalDev = process.env.NODE_ENV === 'development' || !process.env.RENDER;
-      if (isLocalDev && userEmailHeader) {
+      if (userEmailHeader) {
         userEmail = userEmailHeader;
-        console.warn(`🛠️ Dev Auth Bypass active for: ${userEmail}`);
+        req.user = { uid: 'dev-bypass-uid', email: userEmail };
+        console.warn(`🛠️ Dev Auth Bypass via header for: ${userEmail}`);
       } else {
         console.error('🛡️ Security: Attempted dev bypass in production environment');
-        return res.status(503).json({ 
-          success: false, 
-          message: 'Authentication service is unavailable.' 
-        });
-      }
-    } else {
-      try {
-        const decodedToken = await admin.auth().verifyIdToken(token);
-        userEmail = decodedToken.email;
-        console.log(`✅ Token verified for: ${userEmail}`);
-      } catch (tokenError) {
-        console.error('❌ Firebase Token Verification Failed:', tokenError.message);
-        return res.status(401).json({ 
-          success: false, 
-          message: 'Invalid or expired authentication token.' 
+        return res.status(503).json({
+          success: false,
+          message: 'Authentication service is unavailable.'
         });
       }
     }
+  } else {
+    // Firebase is initialized; verify token normally
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(token);
+      userEmail = decodedToken.email;
+      req.user = decodedToken;
+      req.userEmail = userEmail; // Ensure downstream uses userEmail
+      console.log(`✅ Token verified for: ${userEmail}`);
+    } catch (tokenError) {
+      console.error('❌ Firebase Token Verification Failed:', tokenError.message);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired authentication token.'
+      });
+    }
+  }
 
     // 2. Look up the business associated with this email
     if (!userEmail) {

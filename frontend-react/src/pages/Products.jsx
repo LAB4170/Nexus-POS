@@ -17,12 +17,14 @@ export default function Products() {
 
   useEffect(() => {
     fetchProducts();
+    const handleDataUpdate = (data) => {
+      if (data.type === 'product' || data.type === 'sale') fetchProducts();
+    };
+
     if (socket) {
-      socket.on('data-update', (data) => {
-        if (data.type === 'product' || data.type === 'sale') fetchProducts();
-      });
+      socket.on('data-update', handleDataUpdate);
     }
-    return () => socket?.off('data-update');
+    return () => socket?.off('data-update', handleDataUpdate);
   }, [socket]);
 
   const fetchProducts = async () => {

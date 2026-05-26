@@ -73,7 +73,8 @@ function isAllowedOrigin(origin) {
   return allowed.length === 0 || allowed.includes(normalizeOrigin(origin));
 }
 
-app.set('trust proxy', true);
+const isProduction = process.env.NODE_ENV === 'production';
+app.set('trust proxy', isProduction);
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
@@ -174,7 +175,7 @@ app.use('/api/debts', requireBusinessAuth, requireTenantContext, requireActiveSu
 app.use('/api/dashboard', adminDashboardLimiter, requireBusinessAuth, requireTenantContext, requireActiveSubscription, dashboardRoutes);
 app.use('/api/payments', paymentLimiter, requireBusinessAuth, requireTenantContext, paymentsRoutes);
 app.use('/api/admin', requireFirebaseAdminAuth, adminRoutes);
-app.use('/api/support', supportRoutes);
+app.use('/api/support', requireBusinessAuth, supportRoutes);
 
 // API Root Message
 app.get('/', (req, res) => {

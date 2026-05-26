@@ -169,16 +169,17 @@ export default function Dashboard() {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('data-update', (data) => {
+    const handleDataUpdate = (data) => {
       console.log('🔄 Real-time update:', data.type);
       debouncedFetch();
-    });
+    };
 
+    socket.on('data-update', handleDataUpdate);
     socket.on('data-refresh', debouncedFetch);
 
     return () => {
-      socket.off('data-update');
-      socket.off('data-refresh');
+      socket.off('data-update', handleDataUpdate);
+      socket.off('data-refresh', debouncedFetch);
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [socket]);

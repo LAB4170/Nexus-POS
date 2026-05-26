@@ -19,8 +19,33 @@ export default function Sales() {
   const socket = useSocket();
 
   useEffect(() => {
-    fetchProducts();
+    let isMounted = true;
+    const fetchWrapper = () => { if (isMounted) fetchProducts() };
+    fetchWrapper();
+
+    const handleDataUpdate = (data) => {
+      if (data.type === 'product') fetchWrapper();
+    };
+
+    // 🌐 CONNECTION OBSERVER
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    if (socket) {
+      socket.on('data-update', handleDataUpdate);
+    }
     
+    return () => {
+      isMounted = false;
+      if (socket) socket.off('data-update', handleDataUpdate);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [socket]);
+
+  useEffect(() => {
     // 🔍 NATIVE BARCODE SCANNER INTEGRATION
     let barcodeBuffer = '';
     let lastKeyTime = Date.now();
@@ -46,24 +71,10 @@ export default function Sales() {
 
     window.addEventListener('keypress', handleKeyPress);
 
-    // 🌐 CONNECTION OBSERVER
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    if (socket) {
-      socket.on('data-update', (data) => {
-        if (data.type === 'product') fetchProducts();
-      });
-    }
     return () => {
-      socket?.off('data-update');
       window.removeEventListener('keypress', handleKeyPress);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
     };
-  }, [socket, products]);
+  }, [products, cart]);
 
   const fetchProducts = async () => {
     try {

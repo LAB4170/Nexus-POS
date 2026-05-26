@@ -122,6 +122,7 @@ router.get('/:id', catchAsync(async (req, res) => {
 
 // POST /api/sales - Create new sale (supports multi-item baskets)
 router.post('/', saleValidationRules, validate, catchAsync(async (req, res) => {
+  console.log('DEBUG SALE PAYLOAD:', JSON.stringify(req.body, null, 2));
   const saleData = {
     ...req.body,
     businessId: req.businessId,
