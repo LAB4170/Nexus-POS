@@ -1,3 +1,11 @@
+// -------------------------------------------------------
+// Nexus POS Backend Server
+// This file sets up the Express server, middleware, sockets,
+// and connects to the PostgreSQL database.
+// Security notes:
+// - Environment variables are loaded from .env and never logged.
+// - No API keys or secrets are exposed in code or responses.
+// -------------------------------------------------------
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');

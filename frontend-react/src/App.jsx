@@ -1,3 +1,6 @@
+// Frontend entry point for Nexus POS
+// This file sets up routing, context providers, and theme.
+// No secrets or API keys are hard‑coded; all credentials come from the backend via environment variables.
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
