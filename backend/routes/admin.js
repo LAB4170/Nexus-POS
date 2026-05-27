@@ -5,6 +5,7 @@ const { catchAsync } = require('../middleware/errorHandler');
 const { auditLog } = require('../middleware/auditLog');
 const { admin } = require('../config/firebase');
 const { v4: uuidv4 } = require('uuid');
+const pagination = require('../middleware/pagination');
 
 /**
  * GET /api/admin/overview
@@ -126,8 +127,13 @@ router.get('/overview', auditLog('VIEW_OVERVIEW'), catchAsync(async (req, res) =
 /**
  * GET /api/admin/activities
  */
-router.get('/activities', auditLog('VIEW_ACTIVITIES'), catchAsync(async (req, res) => {
-    // FIX: Join sale_items so product_name and quantity are available per line item
+router.get('/activities', auditLog('VIEW_ACTIVITIES'), pagination(50), catchAsync(async (req, res) => {
+    const { limit, offset } = req.pagination;
+    
+    // Get total count
+    const totalRes = await db('sale_items as si').join('sales as s', 'si.sale_id', 's.id').count('si.id as count').first();
+    const total = parseInt(totalRes.count || 0);
+
     const activities = await db('sale_items as si')
         .join('sales as s', 'si.sale_id', 's.id')
         .join('businesses as b', 's.business_id', 'b.id')
@@ -137,19 +143,28 @@ router.get('/activities', auditLog('VIEW_ACTIVITIES'), catchAsync(async (req, re
           'b.name as business_name'
         )
         .orderBy('s.created_at', 'desc')
-        .limit(50);
-    res.json({ success: true, data: activities });
+        .limit(limit)
+        .offset(offset);
+        
+    res.json({ success: true, data: activities, pagination: { ...req.pagination, total } });
 }));
 
 /**
  * SUPPORT ROUTES
  */
-router.get('/support/tickets', auditLog('VIEW_SUPPORT_TICKETS'), catchAsync(async (req, res) => {
+router.get('/support/tickets', auditLog('VIEW_SUPPORT_TICKETS'), pagination(20), catchAsync(async (req, res) => {
+  const { limit, offset } = req.pagination;
+  const totalRes = await db('support_tickets').count('id as count').first();
+  const total = parseInt(totalRes.count || 0);
+
   const tickets = await db('support_tickets as t')
     .join('businesses as b', 't.business_id', 'b.id')
     .select('t.*', 'b.name as business_name', 'b.owner_email')
-    .orderBy('t.updated_at', 'desc');
-  res.json({ success: true, data: tickets });
+    .orderBy('t.updated_at', 'desc')
+    .limit(limit)
+    .offset(offset);
+    
+  res.json({ success: true, data: tickets, pagination: { ...req.pagination, total } });
 }));
 
 router.get('/support/tickets/:id', auditLog('VIEW_SUPPORT_TICKET_DETAIL'), catchAsync(async (req, res) => {
@@ -191,14 +206,20 @@ router.patch('/support/tickets/:id/status', auditLog('UPDATE_SUPPORT_TICKET_STAT
 /**
  * MERCHANT FLEET
  */
-router.get('/businesses', auditLog('LIST_BUSINESSES'), catchAsync(async (req, res) => {
+router.get('/businesses', auditLog('LIST_BUSINESSES'), pagination(20), catchAsync(async (req, res) => {
+    const { limit, offset } = req.pagination;
+    const totalRes = await db('businesses').count('id as count').first();
+    const total = parseInt(totalRes.count || 0);
+
     const businesses = await db('businesses as b')
       .select('b.*', 
         db.raw('(SELECT COUNT(*) FROM products WHERE business_id = b.id) as product_count'),
         db.raw('(SELECT COUNT(*) FROM sales WHERE business_id = b.id) as sales_count'),
         db.raw('(SELECT SUM(total) FROM sales WHERE business_id = b.id) as total_revenue'),
         db.raw('(SELECT MAX(created_at) FROM sales WHERE business_id = b.id) as last_activity_at'))
-      .orderBy('total_revenue', 'desc');
+      .orderBy('total_revenue', 'desc')
+      .limit(limit)
+      .offset(offset);
 
     const now = new Date();
     const enriched = businesses.map(b => {
@@ -209,7 +230,7 @@ router.get('/businesses', auditLog('LIST_BUSINESSES'), catchAsync(async (req, re
         else if (days > 7) healthStatus = 'AT_RISK';
         return { ...b, healthStatus, daysSinceActivity: Math.floor(days) };
     });
-    res.json({ success: true, data: enriched });
+    res.json({ success: true, data: enriched, pagination: { ...req.pagination, total } });
 }));
 
 router.get('/businesses/:id', auditLog('VIEW_BUSINESS'), catchAsync(async (req, res) => {
@@ -269,18 +290,34 @@ router.post('/businesses/:id/impersonate', auditLog('IMPERSONATE_BUSINESS'), cat
     res.json({ success: true, customToken });
 }));
 
-router.get('/audit-log', auditLog('VIEW_AUDIT_LOG'), catchAsync(async (req, res) => {
-  const logs = await db('admin_audit_log as a').leftJoin('businesses as b', 'a.target_business_id', 'b.id').select('a.*', 'b.name as business_name').orderBy('a.created_at', 'desc').limit(100);
-  res.json({ success: true, data: logs });
+router.get('/audit-log', auditLog('VIEW_AUDIT_LOG'), pagination(50), catchAsync(async (req, res) => {
+  const { limit, offset } = req.pagination;
+  const totalRes = await db('admin_audit_log').count('id as count').first();
+  const total = parseInt(totalRes.count || 0);
+
+  const logs = await db('admin_audit_log as a')
+    .leftJoin('businesses as b', 'a.target_business_id', 'b.id')
+    .select('a.*', 'b.name as business_name')
+    .orderBy('a.created_at', 'desc')
+    .limit(limit)
+    .offset(offset);
+    
+  res.json({ success: true, data: logs, pagination: { ...req.pagination, total } });
 }));
 
 /**
  * GET /api/admin/users
  * Lists actual human users from Firebase
  */
-router.get('/users', auditLog('LIST_USERS'), catchAsync(async (req, res) => {
-    const listUsers = await admin.auth().listUsers(100);
-    const users = listUsers.users.map(u => ({
+router.get('/users', auditLog('LIST_USERS'), pagination(50), catchAsync(async (req, res) => {
+    // Note: Firebase listUsers doesn't natively support easy offset pagination.
+    // For large scale, we would need to use pageToken.
+    // Here we'll fetch a larger set and manually paginate or just return all with faux pagination data if it's small.
+    // Given the task, we'll fetch up to 1000 and slice it.
+    const { limit, offset, page } = req.pagination;
+    const listUsers = await admin.auth().listUsers(1000); // Grab up to 1000 users for simple slicing
+    
+    let users = listUsers.users.map(u => ({
         uid: u.uid,
         email: u.email,
         displayName: u.displayName,
@@ -288,7 +325,11 @@ router.get('/users', auditLog('LIST_USERS'), catchAsync(async (req, res) => {
         lastLogin: u.metadata.lastSignInTime,
         role: u.customClaims?.role || 'merchant'
     }));
-    res.json({ success: true, data: users });
+    
+    const total = users.length;
+    users = users.slice(offset, offset + limit);
+
+    res.json({ success: true, data: users, pagination: { page, limit, offset, total } });
 }));
 
 module.exports = router;

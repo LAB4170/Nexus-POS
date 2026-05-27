@@ -33,6 +33,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import AdminNotifications from '../components/AdminNotifications';
 
 // Ensure API_BASE is absolute to prevent path drift in sub-routes
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').startsWith('http') 
@@ -255,6 +256,7 @@ export default function AdminDashboard() {
       minHeight: '100vh', display: 'flex', flexDirection: 'column',
       fontFamily: "'Inter', sans-serif"
     }}>
+      <AdminNotifications />
       {/* Responsive Header */}
       <header className="glass" style={{
         padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -449,9 +451,14 @@ export default function AdminDashboard() {
         {/* Tab 2: MERCHANT FLEET */}
         {activeTab === 'businesses' && (
           <div className="fade-in">
-             <div className="card-premium" style={{ padding: '0', overflow: 'hidden' }}>
+              <div className="card-premium" style={{ padding: '0', overflow: 'hidden' }}>
                <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="grid-mobile-1">
-                  <h3 style={{ fontSize: '16px', fontWeight: 800 }}>Fleet Management</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 800 }}>Fleet Management</h3>
+                    <a href={`${API_BASE}/admin/export/businesses`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ fontSize: '11px', padding: '6px 12px', borderRadius: '6px', textDecoration: 'none' }}>
+                      Export CSV
+                    </a>
+                  </div>
                   <div className="search-box-premium">
                     <Search size={16} color="var(--text-muted)" />
                     <input placeholder="Search identifier or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />

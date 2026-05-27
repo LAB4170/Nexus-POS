@@ -25,6 +25,7 @@ const { initJobs } = require('./jobs/index');
 const { client, pubClient, subClient, initRedis, isRedisEnabled } = require('./config/redis');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const RedisStore = require('rate-limit-redis').default;
+const { initAdminSocket, emitAdminAlert } = require('./socketAdmin');
 
 /**
  * NEXUS POS MASTER SERVER
@@ -90,6 +91,9 @@ if (isRedisEnabled && pubClient && subClient) {
   io.adapter(createAdapter(pubClient, subClient));
 }
 
+// Initialize Admin Socket Namespace
+initAdminSocket(io);
+
 const { db, testConnection } = require('./config/database');
 const { router: dashboardRoutes, clearDashboardCache } = require('./routes/dashboard');
 const productRoutes = require('./routes/products');
@@ -99,6 +103,7 @@ const debtRoutes = require('./routes/debts');
 const businessRoutes = require('./routes/businesses');
 const paymentsRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
+const adminExportRoutes = require('./routes/adminExport');
 const supportRoutes = require('./routes/support');
 
 const { errorHandler } = require('./middleware/errorHandler');
@@ -138,6 +143,13 @@ const onboardingLimiter = rateLimit({
   store: isRedisEnabled ? new RedisStore({ sendCommand: (...args) => client.sendCommand(args) }) : undefined
 });
 
+const adminApiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { success: false, message: 'Too many admin requests, please try again later.' },
+  store: isRedisEnabled ? new RedisStore({ sendCommand: (...args) => client.sendCommand(args) }) : undefined
+});
+
 const paymentLimiter = rateLimit({ 
   windowMs: 5 * 60 * 1000, 
   max: 50,
@@ -164,6 +176,7 @@ app.locals.clearDashboardCache = (businessId) => clearDashboardCache(businessId)
 app.locals.broadcastDataChange = (type, data) => {
   io.emit('data-update', { type, data });
 };
+app.locals.emitAdminAlert = emitAdminAlert;
 
 // API routes
 app.use('/api', apiGeneralLimiter);
@@ -174,7 +187,8 @@ app.use('/api/expenses', requireBusinessAuth, requireTenantContext, requireActiv
 app.use('/api/debts', requireBusinessAuth, requireTenantContext, requireActiveSubscription, debtRoutes);
 app.use('/api/dashboard', adminDashboardLimiter, requireBusinessAuth, requireTenantContext, requireActiveSubscription, dashboardRoutes);
 app.use('/api/payments', paymentLimiter, requireBusinessAuth, requireTenantContext, paymentsRoutes);
-app.use('/api/admin', requireFirebaseAdminAuth, adminRoutes);
+app.use('/api/admin/export', adminApiLimiter, requireFirebaseAdminAuth, adminExportRoutes);
+app.use('/api/admin', adminApiLimiter, requireFirebaseAdminAuth, adminRoutes);
 app.use('/api/support', requireBusinessAuth, supportRoutes);
 
 // API Root Message
