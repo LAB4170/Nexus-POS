@@ -220,7 +220,26 @@ const start = async () => {
     await initRedis();
     initWorker();
     initJobs();
-    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    
+    // Start Server after ensuring DB is up to date
+    const startServer = async () => {
+      try {
+        if (process.env.NODE_ENV === 'production') {
+          console.log('📦 Running database migrations for production...');
+          await db.migrate.latest();
+          console.log('✅ Database migrations complete.');
+        }
+        
+        server.listen(PORT, () => {
+          console.log(`🚀 Master Node running on port ${PORT} [${process.env.NODE_ENV}]`);
+        });
+      } catch (error) {
+        console.error('❌ Failed to start server:', error.message);
+        process.exit(1);
+      }
+    };
+
+    startServer();
   } catch (e) { console.error('FATAL', e); process.exit(1); }
 };
 start();

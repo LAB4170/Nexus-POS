@@ -32,16 +32,6 @@ const requireTenantContext = async (req, res, next) => {
     ));
   }
 
-  // SET RLS SESSION VARIABLE: This is the critical step.
-  // PostgreSQL RLS policies check current_setting('app.current_business_id').
-  // We set it here (not in transactions) so non-transactional queries are also scoped.
-  try {
-    await db.raw("SELECT set_config('app.current_business_id', ?, false)", [req.businessId]);
-  } catch (e) {
-    // Non-fatal: log and continue — model-level transaction RLS is still a fallback
-    console.warn(`[TenantGuard] Could not set RLS session var: ${e.message}`);
-  }
-
   next();
 };
 
