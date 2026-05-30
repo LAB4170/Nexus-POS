@@ -867,8 +867,6 @@ option {
   min-height: 100vh;
   background-color: var(--bg);
   color: var(--text);
-  overflow-x: hidden;
-  overflow-y: auto;
   position: relative;
 }
 
@@ -1715,21 +1713,12 @@ option {
 }
 
 /* --- Fancy Landing Page Framing --- */
-.landing-root {
-  min-height: 100vh;
-  background-color: var(--bg);
-  position: relative;
-  padding: 24px; /* Frame space */
-  overflow-x: hidden;
-}
-
 .landing-frame-container {
   border: 1px solid var(--border);
   border-radius: 40px;
   background-color: var(--bg);
   box-shadow: 0 0 100px rgba(0, 0, 0, 0.5), inset 0 0 40px rgba(16, 185, 129, 0.05);
   position: relative;
-  overflow: hidden;
   z-index: 1;
 }
 
