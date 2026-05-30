@@ -225,6 +225,12 @@ const start = async () => {
     const startServer = async () => {
       try {
         if (process.env.NODE_ENV === 'production') {
+          console.log('📦 Seeding migration history if needed...');
+          try {
+            require('child_process').execSync('node scripts/seed_migrations.js', { stdio: 'inherit' });
+          } catch (e) {
+            console.error('⚠️ Warning: seed_migrations script failed:', e.message);
+          }
           console.log('📦 Running database migrations for production...');
           await db.migrate.latest();
           console.log('✅ Database migrations complete.');
