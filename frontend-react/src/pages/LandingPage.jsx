@@ -19,9 +19,9 @@ export default function LandingPage() {
       { icon: BarChart3, title: 'Real-time Analytics', desc: 'Watch your revenue grow in real-time with stunning, auto-updating charts and KPIs.', image: '/assets/analytics.png' },
       { icon: Users, title: 'Customer Debts', desc: 'Never lose track of unpaid balances. Manage customer credit limits and partial repayments.', image: '/assets/debts.png' },
       { icon: Zap, title: 'Fractional Sales', desc: 'Sell by the kilogram, liter, or pieces. Native UoM support for extreme accuracy.', image: '/assets/fractional.png' },
-      { icon: ShieldCheck, title: 'Multi-Tenant Security', desc: 'True SaaS isolation ensures your data is hermetically sealed within your business scope.', image: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=800' },
-      { icon: Store, title: 'Multi-Store Ready', desc: 'Easily expand across locations while maintaining central visibility into stock levels.', image: 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?auto=format&fit=crop&q=80&w=800' },
-      { icon: Smartphone, title: 'Mobile Optimized', desc: 'Manage your store from your iPad or mobile device with a highly responsive glass-morphism UI.', image: 'https://images.unsplash.com/photo-1512428559087-560fa5ceab42?auto=format&fit=crop&q=80&w=800' },
+      { icon: ShieldCheck, title: 'Multi-Tenant Security', desc: 'True SaaS isolation ensures your data is hermetically sealed within your business scope.', image: '/assets/analytics.png' },
+      { icon: Store, title: 'Multi-Store Ready', desc: 'Easily expand across locations while maintaining central visibility into stock levels.', image: '/assets/debts.png' },
+      { icon: Smartphone, title: 'Mobile Optimized', desc: 'Manage your store from your iPad or mobile device with a highly responsive glass-morphism UI.', image: '/assets/fractional.png' },
     ]
   ), []);
 
@@ -101,7 +101,7 @@ export default function LandingPage() {
           {/* Professional 3D Hero Dashboard Image */}
           <div className="hero-visual reveal">
             <div className="hero-image-container glass" style={{ padding: '0', overflow: 'hidden', borderRadius: '24px' }}>
-              <img src="/assets/hero.png" alt="Nexus POS Dashboard" loading="lazy" style={{ width: '100%', height: 'auto', display: 'block' }} onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1556742044-3c52d6e88c62?auto=format&fit=crop&q=80&w=2000"; }}/>
+              <img src="/assets/hero.png" alt="Nexus POS Dashboard" loading="lazy" style={{ width: '100%', height: 'auto', display: 'block' }} />
             </div>
           </div>
         </section>
