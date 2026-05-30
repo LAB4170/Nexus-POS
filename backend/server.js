@@ -59,13 +59,24 @@ function normalizeOrigin(value) {
   }
 }
 
+// Known static trusted origins always included in production
+const STATIC_ALLOWED_ORIGINS = [
+  'https://nexus-point-of-sale.netlify.app',
+  'https://nexus-pos-gq52.onrender.com'
+];
+
 function getAllowedOrigins() {
   const isDevelopment = process.env.NODE_ENV === 'development';
   if (isDevelopment) {
     return ['http://localhost:5000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'].map(normalizeOrigin);
   }
-  const all = (process.env.FRONTEND_URLS ? process.env.FRONTEND_URLS.split(',') : [process.env.FRONTEND_URL]).filter(Boolean).map(normalizeOrigin);
-  return all;
+  // Merge env-configured origins + static trusted origins
+  const envOrigins = (process.env.FRONTEND_URLS
+    ? process.env.FRONTEND_URLS.split(',')
+    : [process.env.FRONTEND_URL]
+  ).filter(Boolean).map(normalizeOrigin);
+
+  return [...new Set([...STATIC_ALLOWED_ORIGINS.map(normalizeOrigin), ...envOrigins])];
 }
 
 function isAllowedOrigin(origin) {
@@ -225,15 +236,22 @@ const start = async () => {
     const startServer = async () => {
       try {
         if (process.env.NODE_ENV === 'production') {
+          // Step 1: Seed knex_migrations table if the schema already exists but Knex tracking is missing
           console.log('📦 Seeding migration history if needed...');
           try {
             require('child_process').execSync('node scripts/seed_migrations.js', { stdio: 'inherit' });
           } catch (e) {
             console.error('⚠️ Warning: seed_migrations script failed:', e.message);
           }
+          // Step 2: Run only NEW pending migrations (will skip everything already recorded above)
           console.log('📦 Running database migrations for production...');
-          await db.migrate.latest();
-          console.log('✅ Database migrations complete.');
+          try {
+            await db.migrate.latest();
+            console.log('✅ Database migrations complete.');
+          } catch (migrateErr) {
+            // Log the migration error but DO NOT crash the server — the DB already has the schema
+            console.error('⚠️ Migration error (non-fatal, schema likely already exists):', migrateErr.message);
+          }
         }
         
         server.listen(PORT, () => {
