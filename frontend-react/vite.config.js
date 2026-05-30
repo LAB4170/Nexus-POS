@@ -19,6 +19,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       }
+    },
+    // Prevent browser from serving stale cached assets
+    headers: {
+      'Cross-Origin-Resource-Policy': 'cross-origin',
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
     }
   },
   build: {

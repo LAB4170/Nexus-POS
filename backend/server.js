@@ -118,7 +118,14 @@ app.use(cors({
   origin: (origin, cb) => isAllowedOrigin(origin) ? cb(null, true) : cb(new Error('CORS')),
   credentials: true
 }));
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" } }));
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  // "same-origin-allow-popups" lets Firebase Google Sign-In popup work correctly
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  // "cross-origin" allows serving images/assets to other origins (needed when frontend is on a different domain)
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 app.use(morgan('dev'));
 app.use(compression());
 app.use(express.json());

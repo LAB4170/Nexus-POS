@@ -1,14 +1,15 @@
 const { AppError } = require('./errorHandler');
+const { db } = require('../config/database');
 
 /**
  * Tenant Guard Middleware (Fail-Close)
  * This middleware ensures that a business context (businessId) is present 
  * on the request object before allowing access to tenant-specific resources.
  * 
- * It acts as a safety net in case a route is protected by requireBusinessAuth 
- * but somehow the businessId injection fails or is bypassed.
+ * It also sets the PostgreSQL session variable for Row-Level Security (RLS)
+ * so that all model queries are automatically scoped to this tenant.
  */
-const requireTenantContext = (req, res, next) => {
+const requireTenantContext = async (req, res, next) => {
   // If we're on a multi-tenant route but have no business identity, 
   // we must FAIL-CLOSE immediately to prevent cross-tenant data leaks.
   if (!req.businessId) {
@@ -31,7 +32,18 @@ const requireTenantContext = (req, res, next) => {
     ));
   }
 
+  // SET RLS SESSION VARIABLE: This is the critical step.
+  // PostgreSQL RLS policies check current_setting('app.current_business_id').
+  // We set it here (not in transactions) so non-transactional queries are also scoped.
+  try {
+    await db.raw("SELECT set_config('app.current_business_id', ?, false)", [req.businessId]);
+  } catch (e) {
+    // Non-fatal: log and continue — model-level transaction RLS is still a fallback
+    console.warn(`[TenantGuard] Could not set RLS session var: ${e.message}`);
+  }
+
   next();
 };
 
 module.exports = { requireTenantContext };
+

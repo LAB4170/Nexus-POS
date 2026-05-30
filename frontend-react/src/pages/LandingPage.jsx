@@ -14,17 +14,17 @@ export default function LandingPage() {
   const { currentUser } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
 
-  // Feature data – memoized to avoid re-creation on each render
   const features = useMemo(() => (
     [
-      { icon: BarChart3, title: 'Real-time Analytics', desc: 'Watch your revenue grow in real-time with stunning, auto-updating charts and KPIs.', image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=800&q=80' },
-      { icon: Users, title: 'Customer Debts', desc: 'Never lose track of unpaid balances. Manage customer credit limits and partial repayments.', image: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80' },
-      { icon: Zap, title: 'Fractional Sales', desc: 'Sell by the kilogram, liter, or pieces. Native UoM support for extreme accuracy.', image: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=800&q=80' },
+      { icon: BarChart3, title: 'Real-time Analytics', desc: 'Watch your revenue grow in real-time with stunning, auto-updating charts and KPIs.', image: '/assets/analytics.png' },
+      { icon: Users, title: 'Customer Debts', desc: 'Never lose track of unpaid balances. Manage customer credit limits and partial repayments.', image: '/assets/debts.png' },
+      { icon: Zap, title: 'Fractional Sales', desc: 'Sell by the kilogram, liter, or pieces. Native UoM support for extreme accuracy.', image: '/assets/fractional.png' },
       { icon: ShieldCheck, title: 'Multi-Tenant Security', desc: 'True SaaS isolation ensures your data is hermetically sealed within your business scope.', image: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=800' },
       { icon: Store, title: 'Multi-Store Ready', desc: 'Easily expand across locations while maintaining central visibility into stock levels.', image: 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?auto=format&fit=crop&q=80&w=800' },
       { icon: Smartphone, title: 'Mobile Optimized', desc: 'Manage your store from your iPad or mobile device with a highly responsive glass-morphism UI.', image: 'https://images.unsplash.com/photo-1512428559087-560fa5ceab42?auto=format&fit=crop&q=80&w=800' },
     ]
   ), []);
+
 
   // Memoized feature card to avoid re-renders when props unchanged
   const FeatureCard = memo(({ feature, index }) => (
