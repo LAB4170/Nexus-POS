@@ -332,4 +332,82 @@ router.get('/users', auditLog('LIST_USERS'), pagination(50), catchAsync(async (r
     res.json({ success: true, data: users, pagination: { page, limit, offset, total } });
 }));
 
+
+/**
+ * GET /api/admin/db-health
+ * Comprehensive database health check for diagnosing production issues.
+ * Protected by requireFirebaseAdminAuth (admin-only).
+ */
+router.get('/db-health', catchAsync(async (req, res) => {
+  const report = {};
+
+  // 1. Connectivity
+  try {
+    await db.raw('SELECT 1');
+    report.connectivity = 'OK';
+  } catch (e) {
+    return res.status(503).json({ success: false, message: 'DB unreachable: ' + e.message });
+  }
+
+  // 2. Table existence
+  const tables = ['products', 'sales', 'sale_items', 'expenses', 'debts', 'businesses', 'knex_migrations', 'knex_migrations_lock'];
+  report.tables = {};
+  for (const t of tables) {
+    report.tables[t] = await db.schema.hasTable(t);
+  }
+
+  // 3. Migration history
+  try {
+    const migrations = await db('knex_migrations').select('name', 'batch').orderBy('id');
+    report.migrations = { count: migrations.length, records: migrations };
+  } catch (e) {
+    report.migrations = { error: e.message };
+  }
+
+  // 4. Row counts
+  const countTables = ['products', 'sales', 'sale_items', 'expenses', 'debts', 'businesses'];
+  report.rowCounts = {};
+  for (const t of countTables) {
+    try {
+      const [{ count }] = await db(t).count('* as count');
+      report.rowCounts[t] = parseInt(count);
+    } catch (e) {
+      report.rowCounts[t] = 'ERROR: ' + e.message;
+    }
+  }
+
+  // 5. RLS status — the main suspect for 500s
+  try {
+    const rls = await db.raw(`
+      SELECT tablename, rowsecurity 
+      FROM pg_tables 
+      WHERE schemaname = 'public' 
+      AND tablename IN ('products', 'sales', 'expenses', 'debts', 'sale_items')
+      ORDER BY tablename
+    `);
+    report.rls = {};
+    rls.rows.forEach(r => { report.rls[r.tablename] = r.rowsecurity ? 'ENABLED (🔴 DANGER)' : 'disabled ✅'; });
+  } catch (e) {
+    report.rls = { error: e.message };
+  }
+
+  // 6. Businesses table columns
+  try {
+    const cols = await db.raw(`SELECT column_name FROM information_schema.columns WHERE table_name='businesses' ORDER BY ordinal_position`);
+    report.businessesColumns = cols.rows.map(r => r.column_name);
+  } catch (e) {
+    report.businessesColumns = 'ERROR: ' + e.message;
+  }
+
+  // 7. Businesses data
+  try {
+    const biz = await db('businesses').select('id', 'name', 'owner_email', 'subscription_status');
+    report.businesses = biz;
+  } catch (e) {
+    report.businesses = 'ERROR: ' + e.message;
+  }
+
+  res.json({ success: true, data: report });
+}));
+
 module.exports = router;
