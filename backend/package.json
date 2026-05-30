@@ -10,7 +10,7 @@
     "migrate": "knex migrate:latest",
     "migrate:prod": "NODE_ENV=production knex migrate:latest",
     "db:setup": "npm run migrate",
-    "build": "echo 'No build step required for backend'"
+    "build": "npm run migrate:prod"
   },
   "jest": {
     "testEnvironment": "node",
