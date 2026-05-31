@@ -172,11 +172,8 @@ router.delete('/:id', catchAsync(async (req, res) => {
     throw new AppError('Product not found', 404);
   }
 
-  // Check if product has sales records before deletion
-  const hasSales = await Product.hasSalesRecords(req.params.id, req.businessId);
-  if (hasSales) {
-    throw new AppError('Cannot delete product that has sales records. Please deactivate the product instead or remove all associated sales first.', 400);
-  }
+  // Database ON DELETE SET NULL will safely handle the historical sales receipts
+
 
   await Product.delete(req.params.id, req.businessId);
   

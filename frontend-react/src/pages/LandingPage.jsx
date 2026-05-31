@@ -54,7 +54,7 @@ export default function LandingPage() {
   }, []);
 
   const handleCTA = () => {
-    if (currentUser) navigate('/app/dashboard'); else navigate('/login');
+    navigate('/login');
   };
 
   return (
