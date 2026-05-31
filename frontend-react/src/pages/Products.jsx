@@ -57,6 +57,8 @@ export default function Products() {
     setIsModalOpen(true);
   };
 
+  const [productToDelete, setProductToDelete] = useState(null);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -72,14 +74,20 @@ export default function Products() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
+  const confirmDelete = async () => {
+    if (!productToDelete) return;
     try {
-      await api.delete(`/products/${id}`);
+      await api.delete(`/products/${productToDelete.id}`);
       fetchProducts();
+      setProductToDelete(null);
     } catch (err) {
       alert(err.response?.data?.message || 'Delete failed');
+      setProductToDelete(null);
     }
+  };
+
+  const handleDeleteClick = (product) => {
+    setProductToDelete(product);
   };
 
   if (loading) return <div className="loading-state">Syncing Inventory...</div>;
@@ -166,7 +174,7 @@ export default function Products() {
                       <button onClick={() => handleOpenModal(product)} className="glass" style={{ padding: '8px', borderRadius: '8px', color: 'var(--accent)' }}>
                         <Edit2 size={16} />
                       </button>
-                      <button onClick={() => handleDelete(product.id)} className="glass" style={{ padding: '8px', borderRadius: '8px', color: 'var(--danger)' }}>
+                      <button onClick={() => handleDeleteClick(product)} className="glass" style={{ padding: '8px', borderRadius: '8px', color: 'var(--danger)' }}>
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -263,6 +271,40 @@ export default function Products() {
           </div>
         </div>
       )}
+      {productToDelete && (
+        <div className="modal-overlay glass" style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}>
+          <div className="card-elevated" style={{ width: '100%', maxWidth: '400px', padding: '32px', textAlign: 'center' }}>
+            <div style={{ width: 64, height: 64, background: 'rgba(239, 68, 68, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--danger)', margin: '0 auto 20px' }}>
+              <Trash2 size={32} />
+            </div>
+            <h2 style={{ fontSize: '20px', marginBottom: '12px' }}>Delete Product</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '24px', lineHeight: 1.5 }}>
+              Are you sure you want to delete <strong>{productToDelete.name}</strong>? 
+              <br/><br/>
+              <span style={{ fontSize: '13px', opacity: 0.8 }}>
+                <strong>Note:</strong> If this product has been sold before, the database will block deletion to protect your historical sales receipts. In that case, you should edit the product and set stock to 0 instead.
+              </span>
+            </p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button 
+                onClick={() => setProductToDelete(null)} 
+                className="btn-secondary" 
+                style={{ flex: 1, padding: '12px' }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete} 
+                className="btn-primary" 
+                style={{ flex: 1, padding: '12px', background: 'var(--danger)', border: 'none' }}
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

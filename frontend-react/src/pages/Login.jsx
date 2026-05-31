@@ -19,8 +19,8 @@ export default function Login() {
   
   // Auto-redirect if already logged in (fixes cases where login succeeds in background)
   useEffect(() => {
-    if (currentUser && !loadingBusiness) {
-      if (isAdmin) {
+    if (currentUser) {
+      if (isAdmin && !loadingBusiness) {
         navigate('/admin');
       } else {
         navigate('/app/dashboard');
