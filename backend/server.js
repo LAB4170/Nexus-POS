@@ -62,6 +62,7 @@ function normalizeOrigin(value) {
 // Known static trusted origins always included in production
 const STATIC_ALLOWED_ORIGINS = [
   'https://nexus-point-of-sale.netlify.app',
+  'https://nexus-pointofsale.netlify.app',
   'https://nexus-pos-gq52.onrender.com'
 ];
 
