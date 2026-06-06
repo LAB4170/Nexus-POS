@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Download, Pencil, Trash2, Eye, X, Save, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Search, Download, Pencil, Trash2, Eye, X, Save, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../services/api';
 import { useSocket } from '../context/SocketContext';
 import { useBusiness } from '../context/BusinessContext';
@@ -10,6 +10,17 @@ const METHOD_COLORS = {
   debt:  { bg: '#F59E0B18', color: '#F59E0B', label: 'DEBT' },
 };
 const statusColor = s => s === 'completed' ? { bg: '#10B98118', color: '#10B981' } : { bg: '#F59E0B18', color: '#F59E0B' };
+
+/** Derive a readable product label from a sale object (handles multi-item) */
+function getItemLabel(sale) {
+  if (sale.items && sale.items.length > 0) {
+    return sale.items.map(it => `${it.product_name || it.productName || 'Unknown'} (x${it.quantity})`).join(', ');
+  }
+  if (sale.productName || sale.product_name) {
+    return `${sale.productName || sale.product_name} (x${sale.quantity || 1})`;
+  }
+  return 'Unknown';
+}
 
 // ── Confirmation Dialog ──
 function ConfirmDialog({ message, onConfirm, onCancel }) {
@@ -33,11 +44,13 @@ function ViewModal({ sale, onClose }) {
   if (!sale) return null;
   const m = METHOD_COLORS[sale.paymentMethod] || METHOD_COLORS.cash;
   const sc = statusColor(sale.status);
+  const itemsDisplay = sale.items && sale.items.length > 0
+    ? sale.items.map(it => `${it.product_name || it.productName} ×${it.quantity} @ KSh ${Number(it.unit_price || it.unitPrice || 0).toLocaleString()}`).join('\n')
+    : getItemLabel(sale);
+
   const rows = [
     ['Sale ID', `#${sale.id.slice(0, 8).toUpperCase()}`],
-    ['Product', sale.productName || '—'],
-    ['Quantity', sale.quantity],
-    ['Unit Price', `KSh ${Number(sale.unitPrice || 0).toLocaleString()}`],
+    ['Items', <pre style={{ fontFamily: 'inherit', margin: 0, whiteSpace: 'pre-wrap', fontSize: 13 }}>{itemsDisplay}</pre>],
     ['Total', `KSh ${Number(sale.total || 0).toLocaleString()}`],
     ['Payment Method', <span style={{ background: m.bg, color: m.color, borderRadius: '6px', padding: '2px 10px', fontWeight: 800, fontSize: 12 }}>{m.label}</span>],
     ['Customer', sale.customerName || '—'],
@@ -46,11 +59,6 @@ function ViewModal({ sale, onClose }) {
     ['Status', <span style={{ background: sc.bg, color: sc.color, borderRadius: '6px', padding: '2px 10px', fontWeight: 800, fontSize: 12, textTransform: 'uppercase' }}>{sale.status}</span>],
     ['Notes', sale.notes || '—'],
     ['Date', new Date(sale.createdAt).toLocaleString('en-KE')],
-    ['Fiscal Sig', sale.metadata?.fiscal?.fiscal_signature ? (
-      <span style={{ fontFamily: 'monospace', color: 'var(--accent)', fontWeight: 800 }}>
-        {sale.metadata.fiscal.fiscal_signature}
-      </span>
-    ) : 'Pending…'],
   ];
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}>
@@ -63,7 +71,7 @@ function ViewModal({ sale, onClose }) {
           <tbody>
             {rows.map(([k, v]) => (
               <tr key={k} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '10px 0', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 700, width: '40%' }}>{k}</td>
+                <td style={{ padding: '10px 0', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 700, width: '40%', verticalAlign: 'top' }}>{k}</td>
                 <td style={{ padding: '10px 0', fontSize: '14px', fontWeight: 600 }}>{v}</td>
               </tr>
             ))}
@@ -77,8 +85,6 @@ function ViewModal({ sale, onClose }) {
 // ── Edit Modal ──
 function EditModal({ sale, onClose, onSaved }) {
   const [form, setForm] = useState({
-    quantity: sale.quantity || 1,
-    unitPrice: sale.unitPrice || 0,
     paymentMethod: sale.paymentMethod || 'cash',
     customerName: sale.customerName || '',
     customerPhone: sale.customerPhone || '',
@@ -90,16 +96,12 @@ function EditModal({ sale, onClose, onSaved }) {
   const [error, setError] = useState('');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const total = (Number(form.quantity) * Number(form.unitPrice)).toFixed(2);
 
   const handleSave = async () => {
     setSaving(true);
     setError('');
     try {
       await api.put(`/sales/${sale.id}`, {
-        quantity: Number(form.quantity),
-        unitPrice: Number(form.unitPrice),
-        total: Number(total),
         paymentMethod: form.paymentMethod,
         customerName: form.customerName || null,
         customerPhone: form.customerPhone || null,
@@ -109,7 +111,7 @@ function EditModal({ sale, onClose, onSaved }) {
       });
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update sale. Please try again.');
+      setError(err.response?.data?.message || 'Failed to update sale.');
     } finally {
       setSaving(false);
     }
@@ -124,7 +126,7 @@ function EditModal({ sale, onClose, onSaved }) {
           {opts.select.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       ) : (
-        <input type={type} step={type === 'number' ? '0.01' : undefined} value={form[key]} onChange={e => set(key, e.target.value)}
+        <input type={type} value={form[key]} onChange={e => set(key, e.target.value)}
           style={{ padding: '10px 12px', borderRadius: '10px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: '14px', fontWeight: 600 }} />
       )}
     </div>
@@ -132,24 +134,16 @@ function EditModal({ sale, onClose, onSaved }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}>
-      <div className="card-elevated" style={{ padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="card-elevated" style={{ padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <div>
             <h3 style={{ fontSize: '20px', fontWeight: 800 }}>Edit Sale</h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{sale.productName} — #{sale.id.slice(0, 8).toUpperCase()}</p>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>#{sale.id.slice(0, 8).toUpperCase()} — KSh {Number(sale.total || 0).toLocaleString()}</p>
           </div>
           <button onClick={onClose} style={{ background: 'var(--surface-hover)', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', color: 'var(--text)', display: 'flex' }}><X size={18} /></button>
         </div>
 
-        {/* Total preview */}
-        <div style={{ background: 'var(--accent)18', border: '1px solid var(--accent)40', borderRadius: '10px', padding: '10px 16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--accent)' }}>Calculated Total</span>
-          <span style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent)' }}>KSh {Number(total).toLocaleString()}</span>
-        </div>
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-          {field('Quantity', 'quantity', 'number')}
-          {field('Unit Price (KSh)', 'unitPrice', 'number')}
           {field('Payment Method', 'paymentMethod', 'text', { select: [{ value: 'cash', label: 'Cash' }, { value: 'mpesa', label: 'M-Pesa' }, { value: 'debt', label: 'Debt' }] })}
           {field('Status', 'status', 'text', { select: [{ value: 'completed', label: 'Completed' }, { value: 'pending', label: 'Pending' }, { value: 'cancelled', label: 'Cancelled' }] })}
           {field('Customer Name', 'customerName')}
@@ -171,6 +165,8 @@ function EditModal({ sale, onClose, onSaved }) {
   );
 }
 
+const PER_PAGE = 20;
+
 // ── Main Component ──
 export default function SalesRecords() {
   const { business } = useBusiness();
@@ -178,11 +174,15 @@ export default function SalesRecords() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMethod, setFilterMethod] = useState('all');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [viewSale, setViewSale] = useState(null);
   const [editSale, setEditSale] = useState(null);
   const [deleteSale, setDeleteSale] = useState(null);
   const [toast, setToast] = useState(null);
   const debounceRef = useRef(null);
+  const searchDebRef = useRef(null);
   const socket = useSocket();
 
   const showToast = (msg, type = 'success') => {
@@ -190,11 +190,24 @@ export default function SalesRecords() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const fetchSales = async () => {
+  const fetchSales = async (pg = page, method = filterMethod, search = searchTerm) => {
     try {
       setLoading(true);
-      const { data } = await api.get('/sales');
+      const params = new URLSearchParams({
+        page: pg,
+        perPage: PER_PAGE,
+        sortBy: 'created_at',
+        sortDir: 'desc',
+      });
+      if (method !== 'all') params.set('payment_method', method);
+      if (search.trim()) params.set('customer_name', search.trim());
+
+      const { data } = await api.get(`/sales?${params.toString()}`);
       setSales(data.data || []);
+      if (data.meta) {
+        setTotalPages(data.meta.totalPages || 1);
+        setTotalCount(data.meta.total || 0);
+      }
     } catch (err) {
       console.error('Failed to fetch sales', err);
     } finally {
@@ -202,29 +215,37 @@ export default function SalesRecords() {
     }
   };
 
+  // Reset to page 1 when filters change
   useEffect(() => {
-    fetchSales();
-    const interval = setInterval(fetchSales, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    clearTimeout(searchDebRef.current);
+    searchDebRef.current = setTimeout(() => {
+      setPage(1);
+      fetchSales(1, filterMethod, searchTerm);
+    }, 400);
+  }, [searchTerm, filterMethod]);
+
+  // Refetch on page change
+  useEffect(() => {
+    fetchSales(page, filterMethod, searchTerm);
+  }, [page]);
 
   useEffect(() => {
     if (!socket) return;
     const debounced = () => {
       clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(fetchSales, 500);
+      debounceRef.current = setTimeout(() => fetchSales(page, filterMethod, searchTerm), 500);
     };
     socket.on('data-update', debounced);
     socket.on('data-refresh', debounced);
     return () => { socket.off('data-update', debounced); socket.off('data-refresh', debounced); };
-  }, [socket]);
+  }, [socket, page, filterMethod, searchTerm]);
 
   const handleDelete = async () => {
     try {
       await api.delete(`/sales/${deleteSale.id}`);
-      setSales(s => s.filter(x => x.id !== deleteSale.id));
       setDeleteSale(null);
       showToast('Sale deleted successfully.');
+      fetchSales(page, filterMethod, searchTerm);
     } catch (err) {
       setDeleteSale(null);
       showToast(err.response?.data?.message || 'Failed to delete sale.', 'error');
@@ -234,36 +255,42 @@ export default function SalesRecords() {
   const handleSaved = () => {
     setEditSale(null);
     showToast('Sale updated successfully!');
-    fetchSales();
+    fetchSales(page, filterMethod, searchTerm);
   };
 
-  const handleExport = () => {
-    if (!filteredSales.length) return;
-    const headers = ['ID', 'Product', 'Quantity', 'Unit Price', 'Total', 'Method', 'Customer', 'Phone', 'Status', 'Date'];
-    const rows = filteredSales.map(s => [
-      s.id, s.productName, s.quantity, s.unitPrice || 0, s.total,
-      s.paymentMethod, s.customerName || '', s.customerPhone || '', s.status,
-      new Date(s.createdAt).toLocaleString('en-KE')
-    ]);
-    const csvContent = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const prefix = business?.name ? `${business.name.toLowerCase().replace(/\s+/g, '-')}-` : '';
-    a.href = url; a.download = `${prefix}sales-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-    window.URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    try {
+      // Fetch ALL sales for export (no pagination)
+      const params = new URLSearchParams({ sortBy: 'created_at', sortDir: 'desc' });
+      if (filterMethod !== 'all') params.set('payment_method', filterMethod);
+      const { data } = await api.get(`/sales?${params.toString()}`);
+      const all = data.data || [];
+      if (!all.length) return;
+
+      const headers = ['ID', 'Items', 'Total', 'Method', 'Customer', 'Phone', 'Status', 'Date'];
+      const rows = all.map(s => [
+        s.id,
+        getItemLabel(s),
+        s.total,
+        s.paymentMethod,
+        s.customerName || '',
+        s.customerPhone || '',
+        s.status,
+        new Date(s.createdAt).toLocaleString('en-KE'),
+      ]);
+      const csvContent = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const prefix = business?.name ? `${business.name.toLowerCase().replace(/\s+/g, '-')}-` : '';
+      a.href = url; a.download = `${prefix}sales-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed', err);
+    }
   };
 
-  const filteredSales = sales.filter(s => {
-    const matchSearch = !searchTerm ||
-      s.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.id?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchMethod = filterMethod === 'all' || s.paymentMethod === filterMethod;
-    return matchSearch && matchMethod;
-  });
-
-  const totalShown = filteredSales.reduce((a, s) => a + Number(s.total || 0), 0);
+  const totalShown = sales.reduce((a, s) => a + Number(s.total || 0), 0);
 
   return (
     <div style={{ paddingBottom: 40 }}>
@@ -272,7 +299,7 @@ export default function SalesRecords() {
       {editSale && <EditModal sale={editSale} onClose={() => setEditSale(null)} onSaved={handleSaved} />}
       {deleteSale && (
         <ConfirmDialog
-          message={`Delete sale of "${deleteSale.productName}" (KSh ${Number(deleteSale.total).toLocaleString()})? This cannot be undone.`}
+          message={`Delete this sale of KSh ${Number(deleteSale.total).toLocaleString()}? This cannot be undone.`}
           onConfirm={handleDelete}
           onCancel={() => setDeleteSale(null)}
         />
@@ -290,20 +317,20 @@ export default function SalesRecords() {
       <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Sales Ledger</h1>
-          <p style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Complete audit history — {sales.length} transactions</p>
+          <p style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Complete audit history — {totalCount} total transactions</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <div className="search-box card-elevated" style={{ background: 'var(--surface)', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '10px' }}>
             <Search size={16} style={{ color: 'var(--text-muted)' }} />
             <input
               type="text"
-              placeholder="Search product, customer, ID..."
+              placeholder="Search customer, ID..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              style={{ background: 'none', border: 'none', outline: 'none', color: 'var(--text)', fontSize: '13px', width: '200px' }}
+              style={{ background: 'none', border: 'none', outline: 'none', color: 'var(--text)', fontSize: '13px', width: '180px' }}
             />
           </div>
-          <select value={filterMethod} onChange={e => setFilterMethod(e.target.value)}
+          <select value={filterMethod} onChange={e => { setFilterMethod(e.target.value); setPage(1); }}
             style={{ padding: '8px 14px', borderRadius: '10px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 700, fontSize: '13px' }}>
             <option value="all">All Methods</option>
             <option value="cash">Cash</option>
@@ -319,13 +346,10 @@ export default function SalesRecords() {
       {/* ── Summary row ── */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {[
-          { label: 'Showing', value: filteredSales.length, suffix: 'records' },
-          { label: 'Total Value', value: `KSh ${totalShown.toLocaleString()}`, suffix: '' },
-          { label: 'Cash', value: `KSh ${filteredSales.filter(s => s.paymentMethod === 'cash').reduce((a, s) => a + Number(s.total), 0).toLocaleString()}`, suffix: '' },
-          { label: 'M-Pesa', value: `KSh ${filteredSales.filter(s => s.paymentMethod === 'mpesa').reduce((a, s) => a + Number(s.total), 0).toLocaleString()}`, suffix: '' },
-          { label: 'Debt', value: `KSh ${filteredSales.filter(s => s.paymentMethod === 'debt').reduce((a, s) => a + Number(s.total), 0).toLocaleString()}`, suffix: '' },
+          { label: 'This Page', value: sales.length, suffix: `records (of ${totalCount})` },
+          { label: 'Page Total', value: `KSh ${totalShown.toLocaleString()}`, suffix: '' },
         ].map(c => (
-          <div key={c.label} className="card-elevated" style={{ padding: '12px 20px', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '130px' }}>
+          <div key={c.label} className="card-elevated" style={{ padding: '12px 20px', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '160px' }}>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>{c.label}</span>
             <span style={{ fontSize: '16px', fontWeight: 800 }}>{c.value} <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{c.suffix}</span></span>
           </div>
@@ -339,23 +363,21 @@ export default function SalesRecords() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Product</th>
-                <th>Qty</th>
-                <th>Unit Price</th>
+                <th>Items Sold</th>
                 <th>Total</th>
                 <th>Method</th>
                 <th>Customer</th>
                 <th>Status</th>
-                <th>Date</th>
+                <th>Date & Time</th>
                 <th style={{ textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="10" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading sales records…</td></tr>
-              ) : filteredSales.length === 0 ? (
-                <tr><td colSpan="10" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No sales match your search.</td></tr>
-              ) : filteredSales.map(sale => {
+                <tr><td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading sales records…</td></tr>
+              ) : sales.length === 0 ? (
+                <tr><td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No sales match your filters.</td></tr>
+              ) : sales.map(sale => {
                 const m = METHOD_COLORS[sale.paymentMethod] || METHOD_COLORS.cash;
                 const sc = statusColor(sale.status);
                 return (
@@ -363,9 +385,11 @@ export default function SalesRecords() {
                     <td style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, fontFamily: 'monospace' }}>
                       #{(sale.id || '').slice(0, 8).toUpperCase()}
                     </td>
-                    <td style={{ fontWeight: 700, maxWidth: '160px' }}>{sale.productName}</td>
-                    <td>{sale.quantity}</td>
-                    <td>KSh {Number(sale.unitPrice || 0).toLocaleString()}</td>
+                    <td style={{ fontWeight: 600, maxWidth: '220px' }}>
+                      <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {getItemLabel(sale)}
+                      </span>
+                    </td>
                     <td style={{ fontWeight: 800 }}>KSh {Number(sale.total || 0).toLocaleString()}</td>
                     <td>
                       <span style={{ background: m.bg, color: m.color, borderRadius: '6px', padding: '2px 10px', fontWeight: 800, fontSize: '11px' }}>{m.label}</span>
@@ -374,8 +398,8 @@ export default function SalesRecords() {
                     <td>
                       <span style={{ background: sc.bg, color: sc.color, borderRadius: '6px', padding: '2px 10px', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase' }}>{sale.status}</span>
                     </td>
-                    <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      {(() => { try { return new Date(sale.createdAt).toLocaleString('en-KE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } })()}
+                    <td style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {(() => { try { return new Date(sale.createdAt).toLocaleString('en-KE', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } })()}
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
@@ -396,6 +420,55 @@ export default function SalesRecords() {
             </tbody>
           </table>
         </div>
+
+        {/* ── Pagination ── */}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>
+              Page {page} of {totalPages} &nbsp;·&nbsp; {totalCount} records
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 14px', borderRadius: '8px', background: page === 1 ? 'var(--surface-hover)' : 'var(--accent)', color: page === 1 ? 'var(--text-muted)' : '#fff', border: 'none', fontWeight: 700, fontSize: '13px', cursor: page === 1 ? 'not-allowed' : 'pointer' }}
+              >
+                <ChevronLeft size={16} /> Prev
+              </button>
+
+              {/* Page numbers */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pg;
+                if (totalPages <= 5) {
+                  pg = i + 1;
+                } else if (page <= 3) {
+                  pg = i + 1;
+                } else if (page >= totalPages - 2) {
+                  pg = totalPages - 4 + i;
+                } else {
+                  pg = page - 2 + i;
+                }
+                return (
+                  <button
+                    key={pg}
+                    onClick={() => setPage(pg)}
+                    style={{ width: 36, height: 36, borderRadius: '8px', border: 'none', background: pg === page ? 'var(--accent)' : 'var(--surface-hover)', color: pg === page ? '#fff' : 'var(--text)', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                  >
+                    {pg}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 14px', borderRadius: '8px', background: page === totalPages ? 'var(--surface-hover)' : 'var(--accent)', color: page === totalPages ? 'var(--text-muted)' : '#fff', border: 'none', fontWeight: 700, fontSize: '13px', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

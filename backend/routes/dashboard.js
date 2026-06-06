@@ -243,14 +243,20 @@ router.get('/recent-activities', catchAsync(async (req, res) => {
 
     // Combine and sort by date
     const activities = [
-      ...recentSales.map(sale => ({
-        id: sale.id,
-        type: 'sale',
-        description: `Sale: ${sale.productName || 'Unknown Product'} (${parseInt(sale.quantity) || 0} units)`,
-        amount: parseFloat(sale.total) || 0,
-        payment_method: sale.paymentMethod || 'cash',
-        created_at: toISO(sale.createdAt || sale.created_at)
-      })),
+      ...recentSales.map(sale => {
+        let desc = 'Unknown Product';
+        if (sale.items && sale.items.length > 0) {
+          desc = sale.items.map(it => `${it.product_name || it.productName || 'Unknown'} (x${it.quantity})`).join(', ');
+        }
+        return {
+          id: sale.id,
+          type: 'sale',
+          description: `Sale: ${desc}`,
+          amount: parseFloat(sale.total) || 0,
+          payment_method: sale.paymentMethod || 'cash',
+          created_at: toISO(sale.createdAt || sale.created_at)
+        };
+      }),
       ...recentExpenses.map(expense => ({
         id: expense.id,
         type: 'expense',
