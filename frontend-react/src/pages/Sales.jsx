@@ -145,11 +145,14 @@ export default function Sales() {
 
 
   // ── LOGIC ──
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredProducts = products.filter(p => {
+    const s = searchTerm.toLowerCase();
+    return (
+      (p.name && p.name.toLowerCase().includes(s)) || 
+      (p.category && p.category.toLowerCase().includes(s)) ||
+      (p.sku && p.sku.toLowerCase().includes(s))
+    );
+  });
 
   const addToCart = (product) => {
     const existing = cart.find(item => item.id === product.id);
@@ -347,7 +350,7 @@ export default function Sales() {
           </div>
 
           {paymentMethod === 'debt' && (
-            <div className="reveal" style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
               <div style={{ flex: 1, position: 'relative' }}>
                 <User size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input 
@@ -456,7 +459,7 @@ export default function Sales() {
       {/* ── PRODUCT SELECTION MODAL ── */}
       {showProductModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-          <div className="card-elevated reveal" style={{ width: '100%', maxWidth: '800px', height: '80vh', display: 'flex', flexDirection: 'column', padding: 0, borderRadius: '20px', overflow: 'hidden' }}>
+          <div className="card-elevated" style={{ width: '100%', maxWidth: '800px', height: '80vh', display: 'flex', flexDirection: 'column', padding: 0, borderRadius: '20px', overflow: 'hidden' }}>
             
             {/* Modal Header & Search */}
             <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', gap: '16px', alignItems: 'center' }}>
