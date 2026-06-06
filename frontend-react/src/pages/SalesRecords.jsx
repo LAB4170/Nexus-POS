@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Download, Pencil, Trash2, Eye, X, Save, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Download, Pencil, Trash2, Eye, X, Save, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, Plus, Minus } from 'lucide-react';
 import api from '../services/api';
 import { useSocket } from '../context/SocketContext';
 import { useBusiness } from '../context/BusinessContext';
@@ -11,7 +11,6 @@ const METHOD_COLORS = {
 };
 const statusColor = s => s === 'completed' ? { bg: '#10B98118', color: '#10B981' } : { bg: '#F59E0B18', color: '#F59E0B' };
 
-/** Derive a readable product label from a sale object (handles multi-item) */
 function getItemLabel(sale) {
   if (sale.items && sale.items.length > 0) {
     return sale.items.map(it => `${it.product_name || it.productName || 'Unknown'} (x${it.quantity})`).join(', ');
@@ -22,24 +21,22 @@ function getItemLabel(sale) {
   return 'Unknown';
 }
 
-// ── Confirmation Dialog ──
 function ConfirmDialog({ message, onConfirm, onCancel }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20 }}>
       <div className="card-elevated" style={{ padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '400px', textAlign: 'center' }}>
         <AlertTriangle size={40} style={{ color: '#EF4444', marginBottom: '16px' }} />
-        <h3 style={{ marginBottom: '8px', fontSize: '18px' }}>Confirm Delete</h3>
+        <h3 style={{ marginBottom: '8px', fontSize: '18px' }}>Confirm Action</h3>
         <p style={{ color: 'var(--text-muted)', marginBottom: '24px', fontSize: '14px' }}>{message}</p>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
           <button onClick={onCancel} style={{ padding: '10px 24px', borderRadius: '10px', background: 'var(--surface-hover)', border: '1px solid var(--border)', fontWeight: 700, cursor: 'pointer', color: 'var(--text)' }}>Cancel</button>
-          <button onClick={onConfirm} style={{ padding: '10px 24px', borderRadius: '10px', background: '#EF4444', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+          <button onClick={onConfirm} style={{ padding: '10px 24px', borderRadius: '10px', background: '#EF4444', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}>Proceed</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── View Modal ──
 function ViewModal({ sale, onClose }) {
   if (!sale) return null;
   const m = METHOD_COLORS[sale.paymentMethod] || METHOD_COLORS.cash;
@@ -82,7 +79,6 @@ function ViewModal({ sale, onClose }) {
   );
 }
 
-// ── Edit Modal ──
 function EditModal({ sale, onClose, onSaved }) {
   const [form, setForm] = useState({
     paymentMethod: sale.paymentMethod || 'cash',
@@ -92,16 +88,53 @@ function EditModal({ sale, onClose, onSaved }) {
     notes: sale.notes || '',
     status: sale.status || 'completed',
   });
+  
+  // Clone items to allow editing quantities/prices
+  const [items, setItems] = useState(
+    (sale.items && sale.items.length > 0) 
+      ? JSON.parse(JSON.stringify(sale.items)) 
+      : [{ productId: sale.productId, productName: sale.productName, quantity: sale.quantity, unitPrice: sale.unitPrice || sale.unit_price, total: sale.total }]
+  );
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const setItemQuantity = (idx, val) => {
+    const v = Math.max(parseFloat(val) || 0, 0);
+    const newItems = [...items];
+    newItems[idx].quantity = v;
+    newItems[idx].total = v * newItems[idx].unitPrice;
+    setItems(newItems);
+  };
+  
+  const setItemPrice = (idx, val) => {
+    const v = Math.max(parseFloat(val) || 0, 0);
+    const newItems = [...items];
+    newItems[idx].unitPrice = v;
+    newItems[idx].total = v * newItems[idx].quantity;
+    setItems(newItems);
+  };
+
+  const removeItem = (idx) => {
+    if (items.length <= 1) {
+      setError("A sale must have at least one item. To delete the sale entirely, use the trash icon in the main table.");
+      return;
+    }
+    setItems(items.filter((_, i) => i !== idx));
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError('');
+    
+    const computedTotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+
     try {
       await api.put(`/sales/${sale.id}`, {
+        items: items,
+        total: computedTotal,
         paymentMethod: form.paymentMethod,
         customerName: form.customerName || null,
         customerPhone: form.customerPhone || null,
@@ -132,29 +165,86 @@ function EditModal({ sale, onClose, onSaved }) {
     </div>
   );
 
+  const grandTotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}>
-      <div className="card-elevated" style={{ padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div className="card-elevated" style={{ padding: 0, borderRadius: '16px', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        
+        {/* Header */}
+        <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 10 }}>
           <div>
-            <h3 style={{ fontSize: '20px', fontWeight: 800 }}>Edit Sale</h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>#{sale.id.slice(0, 8).toUpperCase()} — KSh {Number(sale.total || 0).toLocaleString()}</p>
+            <h3 style={{ fontSize: '20px', fontWeight: 800 }}>Edit Sale Details</h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>#{sale.id.slice(0, 8).toUpperCase()}</p>
           </div>
           <button onClick={onClose} style={{ background: 'var(--surface-hover)', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', color: 'var(--text)', display: 'flex' }}><X size={18} /></button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-          {field('Payment Method', 'paymentMethod', 'text', { select: [{ value: 'cash', label: 'Cash' }, { value: 'mpesa', label: 'M-Pesa' }, { value: 'debt', label: 'Debt' }] })}
-          {field('Status', 'status', 'text', { select: [{ value: 'completed', label: 'Completed' }, { value: 'pending', label: 'Pending' }, { value: 'cancelled', label: 'Cancelled' }] })}
-          {field('Customer Name', 'customerName')}
-          {field('Customer Phone', 'customerPhone', 'tel')}
-          {field('M-Pesa Code', 'mpesaCode')}
-          {field('Notes', 'notes')}
+        {/* Content */}
+        <div style={{ padding: '32px', flex: 1, overflowY: 'auto' }}>
+          
+          <div style={{ marginBottom: '32px' }}>
+            <h4 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '12px', color: 'var(--accent)', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Items in Sale</span>
+              <span style={{ color: 'var(--text)' }}>Total: KSh {Number(grandTotal).toLocaleString()}</span>
+            </h4>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {items.map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--surface)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                  
+                  <div style={{ flex: '1 1 150px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: 700, marginBottom: 4 }}>{item.product_name || item.productName}</p>
+                    <button onClick={() => removeItem(idx)} style={{ fontSize: '11px', color: '#EF4444', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 600 }}>Remove Item</button>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Qty</label>
+                      <input 
+                        type="number" 
+                        value={item.quantity} 
+                        onChange={e => setItemQuantity(idx, e.target.value)} 
+                        style={{ width: 60, padding: '6px 8px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 700, fontSize: 13 }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Unit Price (KSh)</label>
+                      <input 
+                        type="number" 
+                        value={item.unitPrice || item.unit_price} 
+                        onChange={e => setItemPrice(idx, e.target.value)} 
+                        style={{ width: 100, padding: '6px 8px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 700, fontSize: 13 }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 80, textAlign: 'right' }}>
+                      <label style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Total</label>
+                      <span style={{ fontSize: 14, fontWeight: 800 }}>{Number(item.quantity * (item.unitPrice || item.unit_price)).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                <AlertTriangle size={10} style={{ display: 'inline', marginRight: 4, position: 'relative', top: 1 }} />
+                Changes to quantity will automatically adjust inventory stock.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+            {field('Payment Method', 'paymentMethod', 'text', { select: [{ value: 'cash', label: 'Cash' }, { value: 'mpesa', label: 'M-Pesa' }, { value: 'debt', label: 'Debt' }] })}
+            {field('Status', 'status', 'text', { select: [{ value: 'completed', label: 'Completed' }, { value: 'pending', label: 'Pending' }, { value: 'cancelled', label: 'Cancelled' }] })}
+            {field('Customer Name', 'customerName')}
+            {field('Customer Phone', 'customerPhone', 'tel')}
+            {field('M-Pesa Code', 'mpesaCode')}
+            {field('Notes', 'notes')}
+          </div>
+
+          {error && <div style={{ color: '#EF4444', background: '#EF444418', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', fontWeight: 700 }}>{error}</div>}
         </div>
 
-        {error && <div style={{ color: '#EF4444', background: '#EF444418', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px', fontWeight: 700 }}>{error}</div>}
-
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+        {/* Footer */}
+        <div style={{ padding: '24px 32px', borderTop: '1px solid var(--border)', display: 'flex', gap: '12px', justifyContent: 'flex-end', background: 'var(--surface)', position: 'sticky', bottom: 0, zIndex: 10 }}>
           <button onClick={onClose} style={{ padding: '10px 24px', borderRadius: '10px', background: 'var(--surface-hover)', border: '1px solid var(--border)', fontWeight: 700, cursor: 'pointer', color: 'var(--text)' }}>Cancel</button>
           <button onClick={handleSave} disabled={saving} style={{ padding: '10px 24px', borderRadius: '10px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', opacity: saving ? 0.7 : 1 }}>
             <Save size={15} />{saving ? 'Saving…' : 'Save Changes'}
@@ -167,7 +257,6 @@ function EditModal({ sale, onClose, onSaved }) {
 
 const PER_PAGE = 20;
 
-// ── Main Component ──
 export default function SalesRecords() {
   const { business } = useBusiness();
   const [sales, setSales] = useState([]);
@@ -215,7 +304,6 @@ export default function SalesRecords() {
     }
   };
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     clearTimeout(searchDebRef.current);
     searchDebRef.current = setTimeout(() => {
@@ -224,7 +312,6 @@ export default function SalesRecords() {
     }, 400);
   }, [searchTerm, filterMethod]);
 
-  // Refetch on page change
   useEffect(() => {
     fetchSales(page, filterMethod, searchTerm);
   }, [page]);
@@ -260,7 +347,6 @@ export default function SalesRecords() {
 
   const handleExport = async () => {
     try {
-      // Fetch ALL sales for export (no pagination)
       const params = new URLSearchParams({ sortBy: 'created_at', sortDir: 'desc' });
       if (filterMethod !== 'all') params.set('payment_method', filterMethod);
       const { data } = await api.get(`/sales?${params.toString()}`);
@@ -294,18 +380,18 @@ export default function SalesRecords() {
 
   return (
     <div style={{ paddingBottom: 40 }}>
-      {/* ── Modals ── */}
+      {/* Modals */}
       {viewSale && <ViewModal sale={viewSale} onClose={() => setViewSale(null)} />}
       {editSale && <EditModal sale={editSale} onClose={() => setEditSale(null)} onSaved={handleSaved} />}
       {deleteSale && (
         <ConfirmDialog
-          message={`Delete this sale of KSh ${Number(deleteSale.total).toLocaleString()}? This cannot be undone.`}
+          message={`Delete this sale of KSh ${Number(deleteSale.total).toLocaleString()}? This will restore the items back into inventory. This cannot be undone.`}
           onConfirm={handleDelete}
           onCancel={() => setDeleteSale(null)}
         />
       )}
 
-      {/* ── Toast ── */}
+      {/* Toast */}
       {toast && (
         <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 99999, background: toast.type === 'error' ? '#EF4444' : '#10B981', color: '#fff', padding: '12px 20px', borderRadius: '12px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
           <CheckCircle size={16} />
@@ -313,56 +399,56 @@ export default function SalesRecords() {
         </div>
       )}
 
-      {/* ── Header ── */}
-      <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+      {/* Header */}
+      <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Sales Ledger</h1>
-          <p style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Complete audit history — {totalCount} total transactions</p>
+          <p style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Complete audit history — {totalCount} transactions</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <div className="search-box card-elevated" style={{ background: 'var(--surface)', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="search-box card-elevated" style={{ background: 'var(--surface)', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '10px', flex: '1 1 200px' }}>
             <Search size={16} style={{ color: 'var(--text-muted)' }} />
             <input
               type="text"
               placeholder="Search customer, ID..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              style={{ background: 'none', border: 'none', outline: 'none', color: 'var(--text)', fontSize: '13px', width: '180px' }}
+              style={{ background: 'none', border: 'none', outline: 'none', color: 'var(--text)', fontSize: '13px', width: '100%' }}
             />
           </div>
           <select value={filterMethod} onChange={e => { setFilterMethod(e.target.value); setPage(1); }}
-            style={{ padding: '8px 14px', borderRadius: '10px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 700, fontSize: '13px' }}>
+            style={{ padding: '10px 14px', borderRadius: '10px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 700, fontSize: '13px' }}>
             <option value="all">All Methods</option>
             <option value="cash">Cash</option>
             <option value="mpesa">M-Pesa</option>
             <option value="debt">Debt</option>
           </select>
-          <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '10px', background: 'var(--accent)', color: '#fff', fontWeight: 700, fontSize: '13px', border: 'none', cursor: 'pointer' }}>
-            <Download size={14} /> Export CSV
+          <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', borderRadius: '10px', background: 'var(--accent)', color: '#fff', fontWeight: 700, fontSize: '13px', border: 'none', cursor: 'pointer' }}>
+            <Download size={14} /> Export
           </button>
         </div>
       </header>
 
-      {/* ── Summary row ── */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      {/* Summary row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '16px' }}>
         {[
-          { label: 'This Page', value: sales.length, suffix: `records (of ${totalCount})` },
+          { label: 'This Page', value: sales.length, suffix: `of ${totalCount}` },
           { label: 'Page Total', value: `KSh ${totalShown.toLocaleString()}`, suffix: '' },
         ].map(c => (
-          <div key={c.label} className="card-elevated" style={{ padding: '12px 20px', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '160px' }}>
+          <div key={c.label} className="card-elevated" style={{ padding: '16px 20px', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>{c.label}</span>
-            <span style={{ fontSize: '16px', fontWeight: 800 }}>{c.value} <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{c.suffix}</span></span>
+            <span style={{ fontSize: '18px', fontWeight: 800 }}>{c.value} <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{c.suffix}</span></span>
           </div>
         ))}
       </div>
 
-      {/* ── Table ── */}
-      <div className="card-elevated" style={{ overflow: 'hidden', padding: 0 }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="pos-table" style={{ width: '100%' }}>
+      {/* Table with mobile horizontal scroll */}
+      <div className="card-elevated" style={{ padding: 0, borderRadius: 14 }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table className="pos-table" style={{ width: '100%', minWidth: '800px' }}>
             <thead>
               <tr>
-                <th>ID</th>
+                <th style={{ padding: '16px 20px' }}>ID</th>
                 <th>Items Sold</th>
                 <th>Total</th>
                 <th>Method</th>
@@ -382,34 +468,34 @@ export default function SalesRecords() {
                 const sc = statusColor(sale.status);
                 return (
                   <tr key={sale.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, fontFamily: 'monospace' }}>
+                    <td style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, fontFamily: 'monospace', padding: '16px 20px' }}>
                       #{(sale.id || '').slice(0, 8).toUpperCase()}
                     </td>
                     <td style={{ fontWeight: 600, maxWidth: '220px' }}>
-                      <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={getItemLabel(sale)}>
                         {getItemLabel(sale)}
                       </span>
                     </td>
                     <td style={{ fontWeight: 800 }}>KSh {Number(sale.total || 0).toLocaleString()}</td>
                     <td>
-                      <span style={{ background: m.bg, color: m.color, borderRadius: '6px', padding: '2px 10px', fontWeight: 800, fontSize: '11px' }}>{m.label}</span>
+                      <span style={{ background: m.bg, color: m.color, borderRadius: '6px', padding: '4px 10px', fontWeight: 800, fontSize: '11px' }}>{m.label}</span>
                     </td>
                     <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{sale.customerName || '—'}</td>
                     <td>
-                      <span style={{ background: sc.bg, color: sc.color, borderRadius: '6px', padding: '2px 10px', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase' }}>{sale.status}</span>
+                      <span style={{ background: sc.bg, color: sc.color, borderRadius: '6px', padding: '4px 10px', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase' }}>{sale.status}</span>
                     </td>
                     <td style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                       {(() => { try { return new Date(sale.createdAt).toLocaleString('en-KE', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } })()}
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                        <button title="View" onClick={() => setViewSale(sale)} style={{ background: '#3B82F618', color: '#3B82F6', border: 'none', borderRadius: '7px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <button title="View" onClick={() => setViewSale(sale)} style={{ background: '#3B82F618', color: '#3B82F6', border: 'none', borderRadius: '7px', padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                           <Eye size={14} />
                         </button>
-                        <button title="Edit" onClick={() => setEditSale(sale)} style={{ background: '#10B98118', color: '#10B981', border: 'none', borderRadius: '7px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <button title="Edit" onClick={() => setEditSale(sale)} style={{ background: '#10B98118', color: '#10B981', border: 'none', borderRadius: '7px', padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                           <Pencil size={14} />
                         </button>
-                        <button title="Delete" onClick={() => setDeleteSale(sale)} style={{ background: '#EF444418', color: '#EF4444', border: 'none', borderRadius: '7px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <button title="Delete" onClick={() => setDeleteSale(sale)} style={{ background: '#EF444418', color: '#EF4444', border: 'none', borderRadius: '7px', padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -421,38 +507,32 @@ export default function SalesRecords() {
           </table>
         </div>
 
-        {/* ── Pagination ── */}
+        {/* Pagination */}
         {totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexWrap: 'wrap', gap: '16px' }}>
             <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>
-              Page {page} of {totalPages} &nbsp;·&nbsp; {totalCount} records
+              Page {page} of {totalPages}
             </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 14px', borderRadius: '8px', background: page === 1 ? 'var(--surface-hover)' : 'var(--accent)', color: page === 1 ? 'var(--text-muted)' : '#fff', border: 'none', fontWeight: 700, fontSize: '13px', cursor: page === 1 ? 'not-allowed' : 'pointer' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', borderRadius: '8px', background: page === 1 ? 'var(--surface-hover)' : 'var(--accent)', color: page === 1 ? 'var(--text-muted)' : '#fff', border: 'none', fontWeight: 700, fontSize: '13px', cursor: page === 1 ? 'not-allowed' : 'pointer' }}
               >
-                <ChevronLeft size={16} /> Prev
+                <ChevronLeft size={16} /> <span className="hide-on-mobile">Prev</span>
               </button>
 
-              {/* Page numbers */}
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let pg;
-                if (totalPages <= 5) {
-                  pg = i + 1;
-                } else if (page <= 3) {
-                  pg = i + 1;
-                } else if (page >= totalPages - 2) {
-                  pg = totalPages - 4 + i;
-                } else {
-                  pg = page - 2 + i;
-                }
+                if (totalPages <= 5) pg = i + 1;
+                else if (page <= 3) pg = i + 1;
+                else if (page >= totalPages - 2) pg = totalPages - 4 + i;
+                else pg = page - 2 + i;
                 return (
                   <button
                     key={pg}
                     onClick={() => setPage(pg)}
-                    style={{ width: 36, height: 36, borderRadius: '8px', border: 'none', background: pg === page ? 'var(--accent)' : 'var(--surface-hover)', color: pg === page ? '#fff' : 'var(--text)', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                    style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '8px', border: 'none', background: pg === page ? 'var(--accent)' : 'var(--surface-hover)', color: pg === page ? '#fff' : 'var(--text)', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
                   >
                     {pg}
                   </button>
@@ -462,14 +542,20 @@ export default function SalesRecords() {
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 14px', borderRadius: '8px', background: page === totalPages ? 'var(--surface-hover)' : 'var(--accent)', color: page === totalPages ? 'var(--text-muted)' : '#fff', border: 'none', fontWeight: 700, fontSize: '13px', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', borderRadius: '8px', background: page === totalPages ? 'var(--surface-hover)' : 'var(--accent)', color: page === totalPages ? 'var(--text-muted)' : '#fff', border: 'none', fontWeight: 700, fontSize: '13px', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}
               >
-                Next <ChevronRight size={16} />
+                <span className="hide-on-mobile">Next</span> <ChevronRight size={16} />
               </button>
             </div>
           </div>
         )}
       </div>
+      
+      <style>{`
+        @media (max-width: 600px) {
+          .hide-on-mobile { display: none; }
+        }
+      `}</style>
     </div>
   );
 }

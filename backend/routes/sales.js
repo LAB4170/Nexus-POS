@@ -172,31 +172,6 @@ router.post('/', saleValidationRules, validate, catchAsync(async (req, res) => {
   });
 }));
 
-router.put('/:id', catchAsync(async (req, res) => {
-  const sale = await Sale.findById(req.params.id, req.businessId);
-  if (!sale) {
-    throw new AppError('Sale not found', 404);
-  }
-
-  // Validate input (partial update)
-  const errors = Sale.validateUpdate(req.body);
-  if (errors.length > 0) {
-    throw new AppError(`Validation failed: ${errors.join(', ')}`, 400);
-  }
-
-  const updatedSale = await Sale.update(req.params.id, req.body, req.businessId);
-  
-  // Real-time broadcast
-  req.app.locals.broadcastDataChange('sale', updatedSale);
-  req.app.locals.broadcastDataChange('product', { id: updatedSale.product_id });
-  req.app.locals.clearDashboardCache(req.businessId);
-  
-  res.json({
-    success: true,
-    message: 'Sale updated successfully',
-    data: updatedSale
-  });
-}));
 
 // PATCH /api/sales/:id/status - Update sale status
 router.patch('/:id/status', catchAsync(async (req, res) => {

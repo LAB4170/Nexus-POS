@@ -315,104 +315,98 @@ class Sale {
     const trx = await dbx.transaction();
 
     try {
-      // Load existing sale
-      const existing = await trx('sales').where('id', id).andWhere('business_id', businessId).first();
-      if (!existing) {
-        throw new Error('Sale not found');
-      }
+      await trx.raw("SELECT set_config('app.current_business_id', ?, true)", [businessId]);
 
-      // Normalize incoming values
-      const nextProductId = updateData.productId;
-      const nextQuantity = parseFloat(updateData.quantity);
-      const nextUnitPrice = parseFloat(updateData.unitPrice);
-      const nextTotal = parseFloat(updateData.total);
-      const nextPaymentMethod = updateData.paymentMethod;
-      const nextStatus = updateData.status;
-      const nextDate = updateData.date;
-      const nextNotes = updateData.notes;
-      const nextMpesaCode = updateData.mpesaCode;
-      const nextCustomerName = updateData.customerName || null;
-      const nextCustomerPhone = updateData.customerPhone || null;
-      const providedCreatedAt = updateData.createdAt || updateData.created_at || null;
+      // Load existing sale (Parent)
+      const existing = await trx('sales').where('id', id).andWhere('business_id', businessId).forUpdate().first();
+      if (!existing) throw new Error('Sale not found');
 
-      // Compute stock adjustments if product or quantity changed
-      const productChanged = nextProductId && nextProductId !== existing.product_id;
-      const quantityChanged = typeof nextQuantity === 'number' && nextQuantity !== existing.quantity;
+      let newTotal = existing.total;
+      let newTotalCogs = existing.total_cogs;
 
-      if (productChanged || quantityChanged) {
-        // If product changed, restore stock to old product fully
-        if (productChanged) {
+      // Handle Items change
+      if (updateData.items && Array.isArray(updateData.items)) {
+        // 1. Fetch old items
+        const oldItems = await trx('sale_items').where('sale_id', id).forUpdate();
+
+        // 2. Restore old stock
+        for (const old of oldItems) {
           await trx('products')
-            .where('id', existing.product_id)
+            .where('id', old.product_id)
             .andWhere('business_id', businessId)
-            .increment('stock_quantity', existing.quantity)
+            .increment('stock_quantity', old.quantity)
             .update('updated_at', new Date().toISOString());
+        }
 
-          // Deduct from new product with availability check
-          const newProduct = await trx('products')
-            .where('id', nextProductId)
+        // 3. Delete old items
+        await trx('sale_items').where('sale_id', id).del();
+
+        // 4. Validate and deduct new stock
+        let totalRevenue = 0;
+        let totalCogs = 0;
+        const itemsToInsert = [];
+
+        for (const item of updateData.items) {
+          const qty = parseFloat(item.quantity);
+          const price = parseFloat(item.unitPrice || item.unit_price);
+          
+          if (isNaN(qty) || qty <= 0) throw new Error(`Invalid quantity for ${item.productName || 'product'}`);
+          if (price < 0) throw new Error(`Invalid price for ${item.productName || 'product'}`);
+
+          const product = await trx('products')
+            .where('id', item.productId || item.product_id)
             .andWhere('business_id', businessId)
             .forUpdate()
             .first();
-          if (!newProduct) throw new Error('New product not found');
-          if (newProduct.stock_quantity < nextQuantity) throw new Error('Insufficient stock for new product');
+
+          if (!product) throw new Error(`Product not found: ${item.productName || item.productId}`);
+          if (product.stock_quantity < qty) throw new Error(`Insufficient stock for ${product.name}`);
+
+          const cost = parseFloat(product.unit_cost || product.cost_price || 0);
+          const lineTotal = normalizeAmount(price * qty);
+
+          totalRevenue = normalizeAmount(totalRevenue + lineTotal);
+          totalCogs = normalizeAmount(totalCogs + (cost * qty));
+
+          itemsToInsert.push({
+            id: uuidv4(),
+            sale_id: id,
+            product_id: product.id,
+            product_name: product.name,
+            quantity: qty,
+            unit_price: price,
+            unit_cost: cost,
+            total: lineTotal
+          });
+
+          // Deduct stock
           await trx('products')
-            .where('id', nextProductId)
+            .where('id', product.id)
             .andWhere('business_id', businessId)
-            .decrement('stock_quantity', nextQuantity)
+            .decrement('stock_quantity', qty)
             .update('updated_at', new Date().toISOString());
-        } else if (quantityChanged) {
-          // Same product, adjust by difference
-          const diff = nextQuantity - existing.quantity; // positive means need to deduct more
-          if (diff !== 0) {
-            if (diff > 0) {
-              // Need more stock
-              const product = await trx('products')
-                .where('id', existing.product_id)
-                .andWhere('business_id', businessId)
-                .forUpdate()
-                .first();
-              if (!product) throw new Error('Product not found');
-              if (product.stock_quantity < diff) throw new Error('Insufficient stock for quantity increase');
-              await trx('products')
-                .where('id', existing.product_id)
-                .andWhere('business_id', businessId)
-                .decrement('stock_quantity', diff)
-                .update('updated_at', new Date().toISOString());
-            } else {
-              // Return stock
-              await trx('products')
-                .where('id', existing.product_id)
-                .andWhere('business_id', businessId)
-                .increment('stock_quantity', Math.abs(diff))
-                .update('updated_at', new Date().toISOString());
-            }
-          }
         }
+
+        // 5. Insert new items
+        await trx('sale_items').insert(itemsToInsert);
+
+        newTotal = totalRevenue;
+        newTotalCogs = totalCogs;
       }
 
-      // Prepare sale DB data
+      // Update basic fields
       const dbData = {
-        product_id: nextProductId ?? existing.product_id,
-        product_name: updateData.productName ?? existing.product_name,
-        quantity: nextQuantity ?? existing.quantity,
-        unit_price: isNaN(nextUnitPrice) ? existing.unit_price : nextUnitPrice,
-        total: isNaN(nextTotal) ? existing.total : nextTotal,
-        payment_method: nextPaymentMethod ?? existing.payment_method,
-        customer_name: nextCustomerName,
-        customer_phone: nextCustomerPhone,
-        status: nextStatus ?? existing.status,
-        mpesa_code: nextMpesaCode ?? existing.mpesa_code,
-        notes: nextNotes ?? existing.notes,
-        date: nextDate ?? existing.date,
+        total: newTotal,
+        total_cogs: newTotalCogs,
+        payment_method: updateData.paymentMethod ?? updateData.payment_method ?? existing.payment_method,
+        customer_name: updateData.customerName ?? updateData.customer_name ?? existing.customer_name,
+        customer_phone: updateData.customerPhone ?? updateData.customer_phone ?? existing.customer_phone,
+        status: updateData.status ?? existing.status,
+        mpesa_code: updateData.mpesaCode ?? updateData.mpesa_code ?? existing.mpesa_code,
+        notes: updateData.notes ?? existing.notes,
         updated_at: new Date().toISOString()
       };
 
-      if (providedCreatedAt) {
-        dbData.created_at = providedCreatedAt;
-      }
-
-      // Update sale
       const [updatedSale] = await trx('sales')
         .where('id', id)
         .andWhere('business_id', businessId)
@@ -420,14 +414,12 @@ class Sale {
         .returning('*');
 
       // Keep linked debt consistent
-      const hadDebt = await trx('debts').where('sale_id', id).andWhere('business_id', businessId).first();
+      const hadDebt = await trx('debts').where('sale_id', id).andWhere('business_id', businessId).forUpdate().first();
       const isDebtNow = (dbData.payment_method === 'debt');
 
       if (hadDebt && !isDebtNow) {
-        // Payment changed from debt to non-debt → remove debt
         await trx('debts').where('sale_id', id).andWhere('business_id', businessId).del();
       } else if (!hadDebt && isDebtNow) {
-        // Payment changed to debt → create debt
         await trx('debts').insert({
           id: uuidv4(),
           business_id: businessId,
@@ -435,14 +427,17 @@ class Sale {
           customer_name: dbData.customer_name,
           customer_phone: dbData.customer_phone,
           amount: dbData.total,
+          balance: dbData.total,
+          amount_paid: 0,
           status: 'pending',
-          notes: `Sale: ${dbData.product_name} (${dbData.quantity} units)`,
+          notes: `Sale Update: ${dbData.total}`,
           created_by: updatedSale.created_by || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
       } else if (hadDebt && isDebtNow) {
-        // Still a debt sale → update basic fields and amount
+        // If amount changed, we need to adjust balance. Let's just blindly sync amount and balance for simplicity if no payments were made
+        const amountDiff = dbData.total - hadDebt.amount;
         await trx('debts')
           .where('sale_id', id)
           .andWhere('business_id', businessId)
@@ -450,12 +445,22 @@ class Sale {
             customer_name: dbData.customer_name,
             customer_phone: dbData.customer_phone,
             amount: dbData.total,
-            notes: `Sale: ${dbData.product_name} (${dbData.quantity} units)`,
+            balance: trx.raw('balance + ?', [amountDiff]), // Adjust balance by the diff
             updated_at: new Date().toISOString()
           });
       }
 
       await trx.commit();
+      
+      AuditService.log({
+        businessId: businessId,
+        userEmail: updateData.updatedBy || 'System',
+        action: 'UPDATE',
+        entityType: 'SALE',
+        entityId: id,
+        newData: { total: newTotal }
+      });
+
       return Sale.mapRow(updatedSale);
     } catch (error) {
       await trx.rollback();

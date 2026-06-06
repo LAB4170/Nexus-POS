@@ -387,28 +387,36 @@ export default function Reports() {
           <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Financial Intelligence</h1>
           <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>Real-time auditing and historical reporting</p>
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '2px', overflow: 'hidden' }}>
-            <DatePicker
-              selectsRange={true}
-              startDate={startDate}
-              endDate={endDate}
-              onChange={(update) => setDateRange(update)}
-              isClearable={true}
-              placeholderText="Select Custom Date Range"
-              className="date-picker-input custom-input"
-            />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => { const today = new Date(); setDateRange([today, today]); }} style={{ padding: '6px 12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: 'var(--text)' }}>Today</button>
+            <button onClick={() => { const d = new Date(); d.setDate(d.getDate() - 7); setDateRange([d, new Date()]); }} style={{ padding: '6px 12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: 'var(--text)' }}>Last 7 Days</button>
+            <button onClick={() => { const d = new Date(); d.setMonth(d.getMonth() - 1); setDateRange([d, new Date()]); }} style={{ padding: '6px 12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: 'var(--text)' }}>Last Month</button>
+            <button onClick={() => { const d = new Date(new Date().getFullYear(), 0, 1); setDateRange([d, new Date()]); }} style={{ padding: '6px 12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: 'var(--text)' }}>This Year</button>
           </div>
-          <button onClick={fetchReports} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '10px', background: 'var(--surface-hover)', border: '1px solid var(--border)', fontWeight: 700, fontSize: 13, cursor: 'pointer', color: 'var(--text)' }}>
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <div style={{ display: 'flex', background: 'var(--surface-hover)', borderRadius: '10px', overflow: 'hidden', padding: 2 }}>
-            <button onClick={exportCSV} disabled={exporting || !allSales.length} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 13, cursor: 'pointer', border: 'none', opacity: !allSales.length ? 0.5 : 1 }}>
-              <Download size={14} /> CSV
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '2px', overflow: 'hidden' }}>
+              <DatePicker
+                selectsRange={true}
+                startDate={startDate}
+                endDate={endDate}
+                onChange={(update) => setDateRange(update)}
+                isClearable={true}
+                placeholderText="Select Custom Date Range"
+                className="date-picker-input custom-input"
+              />
+            </div>
+            <button onClick={fetchReports} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '10px', background: 'var(--surface-hover)', border: '1px solid var(--border)', fontWeight: 700, fontSize: 13, cursor: 'pointer', color: 'var(--text)' }}>
+              <RefreshCw size={14} /> Refresh
             </button>
-            <button onClick={exportPDF} disabled={exporting || !allSales.length} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', background: 'var(--accent)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', border: 'none', opacity: !allSales.length ? 0.5 : 1 }}>
-              <Download size={14} /> PDF
-            </button>
+            <div style={{ display: 'flex', background: 'var(--surface-hover)', borderRadius: '10px', overflow: 'hidden', padding: 2 }}>
+              <button onClick={exportCSV} disabled={exporting || !allSales.length} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 13, cursor: 'pointer', border: 'none', opacity: !allSales.length ? 0.5 : 1 }}>
+                <Download size={14} /> CSV
+              </button>
+              <button onClick={exportPDF} disabled={exporting || !allSales.length} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', background: 'var(--accent)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', border: 'none', opacity: !allSales.length ? 0.5 : 1 }}>
+                <Download size={14} /> PDF
+              </button>
+            </div>
           </div>
         </div>
       </header>

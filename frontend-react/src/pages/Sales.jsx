@@ -406,31 +406,50 @@ export default function Sales() {
                     return (
                       <div
                         key={p.id}
-                        onClick={() => addToCart(p)}
                         style={{
-                          padding: 18, borderRadius: 14, cursor: 'pointer', transition: 'transform .1s, box-shadow .1s',
+                          padding: 18, borderRadius: 14, transition: 'transform .1s, box-shadow .1s',
                           background: inCart ? 'var(--accent)10' : 'var(--surface)',
                           border: `1.5px solid ${inCart ? 'var(--accent)' : 'var(--border)'}`,
+                          display: 'flex', flexDirection: 'column'
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
                       >
-                        <div style={{ width: 38, height: 38, background: inCart ? 'var(--accent)20' : 'var(--bg)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, color: 'var(--accent)' }}>
-                          <Plus size={20} />
-                        </div>
                         <h4 style={{ fontSize: 15, fontWeight: 800, marginBottom: 3, color: 'var(--text)' }}>{p.name}</h4>
                         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>{p.category}</p>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 10, paddingBottom: 14 }}>
                           <span style={{ fontWeight: 800, fontSize: 15 }}>KSh {fmt(p.price)}</span>
                           <span style={{ fontSize: 11, fontWeight: 700, color: lowStock ? 'var(--danger)' : 'var(--text-muted)' }}>
                             {p.stockQuantity} {p.unit || 'pcs'}
                           </span>
                         </div>
-                        {inCart && (
-                          <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>
-                            ✓ In cart: {inCart.quantity}
-                          </div>
-                        )}
+                        
+                        <div style={{ marginTop: 'auto' }}>
+                          {!inCart ? (
+                            <button onClick={() => addToCart(p)} style={{ width: '100%', padding: '10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              <Plus size={16} /> Add to Cart
+                            </button>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--accent)' }}>
+                              <button onClick={() => { if (inCart.quantity <= 1) removeFromCart(p.id); else setQuantity(p.id, inCart.quantity - 1); }}
+                                style={{ flex: 1, padding: '8px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text)' }}>
+                                <Minus size={14} />
+                              </button>
+                              <input
+                                type="number"
+                                value={inCart.quantity}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '' || val === '0') removeFromCart(p.id);
+                                  else setQuantity(p.id, val);
+                                }}
+                                style={{ width: 50, textAlign: 'center', border: 'none', background: 'transparent', fontSize: 15, fontWeight: 800, color: 'var(--text)', outline: 'none' }}
+                              />
+                              <button onClick={() => setQuantity(p.id, inCart.quantity + 1)}
+                                style={{ flex: 1, padding: '8px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text)' }}>
+                                <Plus size={14} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
