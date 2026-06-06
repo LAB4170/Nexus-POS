@@ -70,6 +70,16 @@ class Sale {
       throw new Error('At least one item is required for a sale');
     }
 
+    const now = new Date();
+    // Allow a 5-minute buffer for clock drift
+    const maxAllowedDate = new Date(now.getTime() + 5 * 60000); 
+    if (saleData.createdAt) {
+      const providedDate = new Date(saleData.createdAt);
+      if (providedDate > maxAllowedDate) {
+        throw new Error('Cannot create a sale with a future date/time.');
+      }
+    }
+
     const saleId = saleData.id || uuidv4();
     const trx = await dbx.transaction();
     
@@ -123,6 +133,7 @@ class Sale {
       }
 
       // 1. Create sale record (Parent)
+      const finalCreatedAt = saleData.createdAt || new Date().toISOString();
       const [newSale] = await trx('sales')
         .insert({
           id: saleId,
@@ -135,9 +146,9 @@ class Sale {
           status: saleData.status || 'completed',
           mpesa_code: saleData.mpesaCode,
           notes: saleData.notes,
-          date: saleData.date || new Date().toISOString().split('T')[0],
+          date: saleData.date || finalCreatedAt.split('T')[0],
           created_by: saleData.createdBy,
-          created_at: new Date().toISOString(),
+          created_at: finalCreatedAt,
           updated_at: new Date().toISOString()
         })
         .returning('*');

@@ -21,6 +21,10 @@ export default function Sales() {
   const [error, setError]                 = useState('');
   const [isOnline, setIsOnline]           = useState(navigator.onLine);
   const [showModal, setShowModal]         = useState(false);
+  const [customDate, setCustomDate]       = useState(() => {
+    const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+    return (new Date(Date.now() - tzoffset)).toISOString().slice(0, 16);
+  });
 
   const socket = useSocket();
   const searchRef = useRef(null);
@@ -131,6 +135,13 @@ export default function Sales() {
       setError('Customer name and phone are required for debt sales.');
       return;
     }
+    
+    const selectedDate = new Date(customDate);
+    if (selectedDate > new Date()) {
+      setError('Cannot create a sale with a future date and time.');
+      return;
+    }
+
     setIsProcessing(true);
     setError('');
 
@@ -146,7 +157,7 @@ export default function Sales() {
       customerName: customer.name || null,
       customerPhone: customer.phone || null,
       status: 'completed',
-      createdAt: new Date().toISOString(),
+      createdAt: selectedDate.toISOString(),
     };
 
     try {
@@ -318,6 +329,18 @@ export default function Sales() {
               </div>
             </div>
           )}
+
+          {/* Custom Date Time Picker */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>Date & Time of Sale</label>
+            <input
+              type="datetime-local"
+              value={customDate}
+              max={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+              onChange={e => setCustomDate(e.target.value)}
+              style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', outline: 'none', fontSize: 15, fontWeight: 600 }}
+            />
+          </div>
 
           {/* Feedback banner */}
           {(error || successMessage) && (
