@@ -330,16 +330,42 @@ export default function Sales() {
             </div>
           )}
 
+
           {/* Custom Date Time Picker */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>Date & Time of Sale</label>
-            <input
-              type="datetime-local"
-              value={customDate}
-              max={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
-              onChange={e => setCustomDate(e.target.value)}
-              style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', outline: 'none', fontSize: 15, fontWeight: 600 }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
+                Date &amp; Time of Sale
+              </label>
+              <span style={{ fontSize: 11, fontWeight: 700, background: 'var(--accent)20', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px' }}>Adjustable</span>
+            </div>
+            <div style={{ position: 'relative' }}>
+              <input
+                type="datetime-local"
+                value={customDate}
+                max={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+                onChange={e => setCustomDate(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '13px 16px',
+                  borderRadius: 12,
+                  border: '1.5px solid var(--accent)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  outline: 'none',
+                  fontSize: 16,
+                  fontWeight: 700,
+                  letterSpacing: '0.03em',
+                  fontFamily: 'inherit',
+                  boxShadow: '0 0 0 4px var(--accent)10',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <p style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
+              📅 {customDate ? new Date(customDate).toLocaleString('en-KE', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'No date selected'}
+            </p>
           </div>
 
           {/* Feedback banner */}
