@@ -424,28 +424,32 @@ export default function Sales() {
                         
                         <div style={{ marginTop: 'auto' }}>
                           {!inCart ? (
-                            <button onClick={() => addToCart(p)} style={{ width: '100%', padding: '10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                              <Plus size={16} /> Add to Cart
+                            <button onClick={() => addToCart(p)} style={{ width: '100%', padding: '12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--text)' }}>
+                              <Plus size={18} /> ADD ITEM
                             </button>
                           ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--accent)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--accent)', borderRadius: 10, overflow: 'hidden', padding: 2 }}>
                               <button onClick={() => { if (inCart.quantity <= 1) removeFromCart(p.id); else setQuantity(p.id, inCart.quantity - 1); }}
-                                style={{ flex: 1, padding: '8px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text)' }}>
-                                <Minus size={14} />
+                                style={{ flex: 1, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', color: '#fff', display: 'flex', justifyContent: 'center' }}>
+                                <Minus size={18} />
                               </button>
-                              <input
-                                type="number"
-                                value={inCart.quantity}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  if (val === '' || val === '0') removeFromCart(p.id);
-                                  else setQuantity(p.id, val);
-                                }}
-                                style={{ width: 50, textAlign: 'center', border: 'none', background: 'transparent', fontSize: 15, fontWeight: 800, color: 'var(--text)', outline: 'none' }}
-                              />
+                              
+                              <div style={{ background: '#fff', borderRadius: 8, padding: '4px 8px', display: 'flex', justifyContent: 'center', width: '60px' }}>
+                                <input
+                                  type="number"
+                                  value={inCart.quantity}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    if (val === '' || val === '0') removeFromCart(p.id);
+                                    else setQuantity(p.id, val);
+                                  }}
+                                  style={{ width: '100%', textAlign: 'center', border: 'none', background: 'transparent', fontSize: 18, fontWeight: 900, color: '#000', outline: 'none' }}
+                                />
+                              </div>
+
                               <button onClick={() => setQuantity(p.id, inCart.quantity + 1)}
-                                style={{ flex: 1, padding: '8px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text)' }}>
-                                <Plus size={14} />
+                                style={{ flex: 1, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', color: '#fff', display: 'flex', justifyContent: 'center' }}>
+                                <Plus size={18} />
                               </button>
                             </div>
                           )}
@@ -458,12 +462,12 @@ export default function Sales() {
             </div>
 
             {/* Modal footer */}
-            <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>
-                {cart.length} unique item{cart.length !== 1 ? 's' : ''} in cart &nbsp;·&nbsp; Total: <strong style={{ color: 'var(--text)' }}>KSh {fmt(total)}</strong>
+            <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-muted)' }}>
+                {cart.length} unique item{cart.length !== 1 ? 's' : ''} in cart &nbsp;·&nbsp; Total: <strong style={{ color: 'var(--text)', fontSize: 18 }}>KSh {fmt(total)}</strong>
               </span>
-              <button className="btn-primary" onClick={() => setShowModal(false)} style={{ padding: '10px 26px', borderRadius: 10 }}>
-                Done
+              <button className="btn-primary" onClick={() => setShowModal(false)} style={{ padding: '12px 32px', borderRadius: 10, fontSize: 16, fontWeight: 800 }}>
+                Done Adding
               </button>
             </div>
           </div>
