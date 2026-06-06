@@ -126,15 +126,27 @@ export default function Reports() {
     if (!allSales.length) return;
     setExporting(true);
     const headers = ['Date', 'Product', 'Qty', 'Unit Price', 'Total', 'Payment', 'Status'];
-    const rows = allSales.map(s => [
-      new Date(s.createdAt || s.created_at).toLocaleString('en-KE'),
-      s.productName || s.product_name || 'Unknown',
-      s.quantity,
-      s.unitPrice || s.unit_price || 0,
-      s.total,
-      s.paymentMethod || s.payment_method,
-      s.status
-    ]);
+    const rows = allSales.map(s => {
+      let itemDesc = 'Unknown';
+      let totalQty = s.quantity || 0;
+      let uPrice = s.unitPrice || s.unit_price || 0;
+      if (s.items && s.items.length > 0) {
+        itemDesc = s.items.map(i => `${i.product_name || i.productName} (x${i.quantity})`).join('; ');
+        totalQty = s.items.reduce((sum, i) => sum + Number(i.quantity), 0);
+        if (s.items.length === 1) uPrice = s.items[0].unit_price || s.items[0].unitPrice || uPrice;
+      } else if (s.productName || s.product_name) {
+        itemDesc = s.productName || s.product_name;
+      }
+      return [
+        new Date(s.createdAt || s.created_at).toLocaleString('en-KE'),
+        itemDesc,
+        totalQty,
+        uPrice,
+        s.total,
+        s.paymentMethod || s.payment_method,
+        s.status
+      ];
+    });
     const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -590,13 +602,23 @@ export default function Reports() {
               ) : allSales.slice(0, 15).map((s, i) => {
                 const pmColor = s.paymentMethod === 'mpesa' ? '#3B82F6' : s.paymentMethod === 'debt' ? '#F59E0B' : '#10B981';
                 const pmLabel = s.paymentMethod === 'mpesa' ? 'M-PESA' : s.paymentMethod === 'debt' ? 'DEBT' : 'CASH';
+                
+                let itemDesc = 'Unknown';
+                let totalQty = s.quantity || 0;
+                if (s.items && s.items.length > 0) {
+                  itemDesc = s.items.map(it => `${it.product_name || it.productName}`).join(', ');
+                  totalQty = s.items.reduce((sum, it) => sum + Number(it.quantity), 0);
+                } else if (s.productName || s.product_name) {
+                  itemDesc = s.productName || s.product_name;
+                }
+
                 return (
                   <tr key={i}>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {(() => { try { return new Date(s.createdAt || s.created_at).toLocaleString('en-KE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } })()}
                     </td>
-                    <td style={{ fontWeight: 600 }}>{s.productName || s.product_name || 'Unknown'}</td>
-                    <td>{s.quantity}</td>
+                    <td style={{ fontWeight: 600 }}>{itemDesc}</td>
+                    <td>{totalQty}</td>
                     <td style={{ fontWeight: 800 }}>KSh {fmt(s.total)}</td>
                     <td>
                       <span style={{ fontSize: 11, fontWeight: 700, background: `${pmColor}18`, color: pmColor, borderRadius: 4, padding: '2px 7px' }}>{pmLabel}</span>
