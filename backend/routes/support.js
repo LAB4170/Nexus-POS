@@ -34,6 +34,7 @@ router.post('/tickets', catchAsync(async (req, res) => {
         id: ticketId,
         business_id: req.businessId,
         subject,
+        description: message,
         status: 'open',
         priority: 'medium',
         created_at: new Date().toISOString(),
