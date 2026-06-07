@@ -15,7 +15,7 @@ export default function Sales() {
   const [searchTerm, setSearchTerm]       = useState('');
   const [cart, setCart]                   = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [customer, setCustomer]           = useState({ name: '', phone: '' });
+  const [customer, setCustomer]           = useState({ name: 'GUEST', phone: '' });
   const [isProcessing, setIsProcessing]   = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [error, setError]                 = useState('');
@@ -125,7 +125,7 @@ export default function Sales() {
   };
 
   const removeFromCart = id => setCart(prev => prev.filter(i => i.id !== id));
-  const clearCart = () => { setCart([]); setCustomer({ name: '', phone: '' }); };
+  const clearCart = () => { setCart([]); setCustomer({ name: 'GUEST', phone: '' }); };
   const total = cart.reduce((s, i) => s + i.price * i.quantity, 0);
 
   // ── Checkout ──
@@ -308,17 +308,17 @@ export default function Sales() {
             ))}
           </div>
 
-          {/* Debt customer fields */}
-          {paymentMethod === 'debt' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-              <div style={{ position: 'relative' }}>
-                <User size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                <input
-                  type="text" placeholder="Customer Name *"
-                  value={customer.name} onChange={e => setCustomer(c => ({ ...c, name: e.target.value }))}
-                  style={{ width: '100%', padding: '11px 12px 11px 36px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', outline: 'none' }}
-                />
-              </div>
+          {/* Customer fields */}
+          <div style={{ display: 'grid', gridTemplateColumns: paymentMethod === 'debt' ? '1fr 1fr' : '1fr', gap: 12, marginBottom: 20 }}>
+            <div style={{ position: 'relative' }}>
+              <User size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input
+                type="text" placeholder="Customer Name *"
+                value={customer.name} onChange={e => setCustomer(c => ({ ...c, name: e.target.value }))}
+                style={{ width: '100%', padding: '11px 12px 11px 36px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', outline: 'none' }}
+              />
+            </div>
+            {paymentMethod === 'debt' && (
               <div style={{ position: 'relative' }}>
                 <Phone size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
@@ -327,8 +327,8 @@ export default function Sales() {
                   style={{ width: '100%', padding: '11px 12px 11px 36px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', outline: 'none' }}
                 />
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
 
           {/* Custom Date Time Picker */}

@@ -167,6 +167,18 @@ export default function Reports() {
       const doc = new jsPDF();
       const prefix = business?.name ? business.name : 'Business';
 
+      // --- HELPER: Footer ---
+      const addFooter = () => {
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+          doc.setPage(i);
+          doc.setFontSize(8);
+          doc.setTextColor(150);
+          doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
+          doc.text(`Nexus POS - Smart Retail`, 14, doc.internal.pageSize.height - 10);
+        }
+      };
+
       // Header: Premium look
       doc.setFontSize(26);
       doc.setTextColor(15, 23, 42); // Slate 900
@@ -174,7 +186,7 @@ export default function Reports() {
       
       doc.setFontSize(14);
       doc.setTextColor(100, 116, 139); // Slate 500
-      doc.text('FINANCIAL INTELLIGENCE REPORT', 14, 30);
+      doc.text('FINANCIAL & OPERATIONAL REPORT', 14, 30);
 
       // Date Range Info + Generated stamp aligned right
       doc.setFontSize(10);
@@ -197,27 +209,30 @@ export default function Reports() {
       const grossProfit  = totalRevenue - totalCOGS;
       const totalExpenses = data?.stats?.expenses?.total_expenses || 0;
       const trueNetProfit = grossProfit - totalExpenses;
+      const avgOrderVal  = allSales.length ? (totalRevenue / allSales.length) : 0;
 
-      // Financial Summary Block — GAAP-structured P&L
+      // Executive Summary KPIs
+      doc.setFontSize(12);
+      doc.setTextColor(15, 23, 42);
+      doc.text('Executive Summary', 14, 52);
+
       autoTable(doc, {
-        startY: 50,
-        head: [['Metric', 'Amount (KSh)']],
+        startY: 56,
+        head: [['Metric', 'Amount (KSh)', 'Metric', 'Value']],
         body: [
-          ['(+) Total Revenue',       `KSh ${fmt(totalRevenue)}`],
-          ['(-) Cost of Goods Sold',  `KSh ${fmt(totalCOGS)}`],
-          ['(=) Gross Profit',        `KSh ${fmt(grossProfit)}`],
-          ['(-) Operating Expenses',  `KSh ${fmt(totalExpenses)}`],
-          ['(=) Net Profit',          `KSh ${fmt(trueNetProfit)}`],
-          ['    Gross Margin %',      `${totalRevenue ? ((grossProfit / totalRevenue) * 100).toFixed(1) : 0}%`],
-          ['    Net Margin %',        `${totalRevenue ? ((trueNetProfit / totalRevenue) * 100).toFixed(1) : 0}%`],
-          ['Outstanding Debt',        `KSh ${fmt(data?.stats?.debts?.total_outstanding)}`],
-          ['Total Transactions',      `${allSales.length} sales`],
+          ['Total Revenue', `KSh ${fmt(totalRevenue)}`, 'Gross Margin %', `${totalRevenue ? ((grossProfit / totalRevenue) * 100).toFixed(1) : 0}%`],
+          ['Cost of Goods Sold', `KSh ${fmt(totalCOGS)}`, 'Net Margin %', `${totalRevenue ? ((trueNetProfit / totalRevenue) * 100).toFixed(1) : 0}%`],
+          ['Gross Profit', `KSh ${fmt(grossProfit)}`, 'Total Transactions', `${allSales.length} sales`],
+          ['Operating Expenses', `KSh ${fmt(totalExpenses)}`, 'Avg Order Value', `KSh ${fmt(avgOrderVal)}`],
+          ['Net Profit', `KSh ${fmt(trueNetProfit)}`, 'Outstanding Debt', `KSh ${fmt(data?.stats?.debts?.total_outstanding)}`],
         ],
         theme: 'grid',
         headStyles: { fillColor: [59, 130, 246] },
-        styles: { fontSize: 11, cellPadding: 4 },
-        columnStyles: { 0: { fontStyle: 'bold', minCellWidth: 60 } },
-        margin: { top: 10, bottom: 10 }
+        styles: { fontSize: 10, cellPadding: 5 },
+        columnStyles: { 
+          0: { fontStyle: 'bold', minCellWidth: 40 },
+          2: { fontStyle: 'bold', minCellWidth: 40 }
+        },
       });
 
       // Split Analytics section
@@ -225,7 +240,7 @@ export default function Reports() {
       doc.setTextColor(40, 40, 40);
       doc.text('Operational Analytics', 14, doc.lastAutoTable.finalY + 14);
 
-      // Payment Breakdown & Expenses (Side by Side simulation or stacked if simple)
+      // Payment Breakdown & Expenses
       const payDist = data?.charts?.payment_distribution || {};
       const breakdownBody = [
         ['Cash', `KSh ${fmt(payDist.cash || 0)}`],
@@ -240,7 +255,7 @@ export default function Reports() {
         theme: 'striped',
         headStyles: { fillColor: [245, 158, 11] },
         styles: { fontSize: 9 },
-        margin: { right: 110 } // Left side table
+        margin: { right: 110 } 
       });
       const breakdownFinalY = doc.lastAutoTable.finalY;
 
@@ -249,18 +264,18 @@ export default function Reports() {
       
       if (expensesData.length > 0) {
         autoTable(doc, {
-          startY: doc.lastAutoTable.finalY - breakdownBody.length * 10 - 15, // Align with left table
+          startY: doc.lastAutoTable.finalY - breakdownBody.length * 10 - 15,
           head: [['Expense Category', 'Outflow']],
           body: expensesData,
           theme: 'striped',
           headStyles: { fillColor: [239, 68, 68] },
           styles: { fontSize: 9 },
-          margin: { left: 110 } // Right side table
+          margin: { left: 110 } 
         });
         expensesFinalY = doc.lastAutoTable.finalY;
       }
 
-      const maxY = Math.max(breakdownFinalY, expensesFinalY);
+      let maxY = Math.max(breakdownFinalY, expensesFinalY);
 
       // Top Products Table
       const topProductsData = (data?.charts?.top_products || []).slice(0, 5).map(p => [
@@ -270,14 +285,39 @@ export default function Reports() {
       ]);
 
       if (topProductsData.length > 0) {
+        doc.setFontSize(12);
+        doc.setTextColor(40, 40, 40);
         doc.text('Top Performing Products', 14, maxY + 14);
         autoTable(doc, {
-          startY: maxY + 20,
+          startY: maxY + 18,
           head: [['Product', 'Units Sold', 'Total Revenue']],
           body: topProductsData,
           theme: 'grid',
           headStyles: { fillColor: [139, 92, 246] },
           styles: { fontSize: 9 }
+        });
+        maxY = doc.lastAutoTable.finalY;
+      }
+
+      // Inventory Alerts Section
+      const lowStock = data?.stats?.inventory?.low_stock_products || [];
+      if (lowStock.length > 0) {
+        if (maxY > doc.internal.pageSize.height - 60) { doc.addPage(); maxY = 20; }
+        doc.setFontSize(12);
+        doc.setTextColor(220, 38, 38); // Red title
+        doc.text(`⚠ Inventory Alerts (${lowStock.length} Critical Items)`, 14, maxY + 14);
+        
+        autoTable(doc, {
+          startY: maxY + 18,
+          head: [['Product', 'Current Stock', 'Value At Risk']],
+          body: lowStock.map(p => [
+            p.name, 
+            `${p.stock_quantity ?? p.stock ?? 0} units`, 
+            `KSh ${fmt((p.stock_quantity ?? p.stock ?? 0) * (p.selling_price || p.price || 0))}`
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [239, 68, 68] },
+          styles: { fontSize: 9, textColor: [15, 23, 42] }
         });
       }
 
@@ -291,11 +331,10 @@ export default function Reports() {
       doc.setTextColor(100, 116, 139);
       doc.text('Itemized receipt of all recorded interactions matching this snapshot.', 14, 26);
 
-      const tableColumn = ["Date", "Item Sold", "Qty", "Unit Price", "Pmt Method", "Total"];
+      const tableColumn = ["Date", "Customer", "Item Sold", "Qty", "Pmt Method", "Total"];
       const tableRows = [];
 
       allSales.forEach(sale => {
-        // Multi-item formatting: Combine all items into a single descriptive string
         let itemDescription = 'Unknown Item';
         if (sale.items && sale.items.length > 0) {
           itemDescription = sale.items.map(i => `${i.product_name || i.productName} (x${i.quantity})`).join('\n');
@@ -305,9 +344,9 @@ export default function Reports() {
 
         const saleData = [
           new Date(sale.createdAt || sale.created_at).toLocaleString('en-KE', { dateStyle: 'short', timeStyle: 'short' }),
+          sale.customerName || sale.customer_name || 'GUEST',
           itemDescription,
           sale.items?.length > 0 ? `${sale.items.reduce((s, i) => s + Number(i.quantity), 0)}` : `${sale.quantity || 1}`,
-          sale.items?.length === 1 ? `KSh ${fmt(sale.items[0].unit_price || sale.items[0].unitPrice)}` : 'Mixed',
           (sale.paymentMethod || sale.payment_method || '').toUpperCase(),
           `KSh ${fmt(sale.total)}`
         ];
@@ -320,9 +359,11 @@ export default function Reports() {
         body: tableRows,
         theme: 'striped',
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] },
-        styles: { fontSize: 9, cellPadding: 4 },
+        styles: { fontSize: 8, cellPadding: 4 },
         alternateRowStyles: { fillColor: [248, 250, 252] }
       });
+
+      addFooter();
 
       doc.save(`${prefix.toLowerCase().replace(/\s+/g, '-')}-financial-report.pdf`);
     } catch (err) {
