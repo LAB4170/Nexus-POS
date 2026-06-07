@@ -5,53 +5,84 @@ const Product = require('../models/Product');
 const Expense = require('../models/Expense');
 const Debt = require('../models/Debt');
 const { catchAsync } = require('../middleware/errorHandler');
+const { client: redisClient, isRedisEnabled } = require('../config/redis');
 
-// Simple in-memory cache
-const cache = new Map();
+// ─── Cache TTLs (in seconds for Redis, ms for memory fallback) ───────────────
 const CACHE_TTL = {
-  stats: 60 * 1000,       // 60 seconds — short TTL so daily cards stay accurate
-  charts: 5 * 60 * 1000   // 5 minutes for charts
+  stats:  60,        // 60s — stay accurate for live dashboard
+  charts: 5 * 60    // 5 min for chart data
 };
 
-// Simple cache helper functions
-const getFromCache = (key) => {
-  const item = cache.get(key);
-  if (!item) return null;
-  
-  if (Date.now() > item.expires) {
-    cache.delete(key);
-    return null;
+// In-memory fallback (used when Redis is unavailable)
+const memCache = new Map();
+
+/**
+ * getFromCache — async, Redis-first with in-memory fallback
+ */
+const getFromCache = async (key) => {
+  try {
+    if (isRedisEnabled && redisClient && redisClient.isReady) {
+      const raw = await redisClient.get(key);
+      return raw ? JSON.parse(raw) : null;
+    }
+  } catch (err) {
+    console.warn('⚠️ Redis GET failed, falling back to memory:', err.message);
   }
-  
+
+  // In-memory fallback
+  const item = memCache.get(key);
+  if (!item) return null;
+  if (Date.now() > item.expires) { memCache.delete(key); return null; }
   return item.data;
 };
 
-const setCache = (key, data, ttlMs) => {
-  // SAFETY FLUSH: Prevent memory leaks as the user base grows
-  if (cache.size > 1000) {
-    console.warn('⚠️ Dashboard Cache Limit Reached. Performing Safety Flush.');
-    cache.clear();
+/**
+ * setCache — async, Redis-first with in-memory fallback
+ */
+const setCache = async (key, data, ttlSeconds) => {
+  try {
+    if (isRedisEnabled && redisClient && redisClient.isReady) {
+      await redisClient.setEx(key, ttlSeconds, JSON.stringify(data));
+      return;
+    }
+  } catch (err) {
+    console.warn('⚠️ Redis SET failed, falling back to memory:', err.message);
   }
-  
-  cache.set(key, {
-    data,
-    expires: Date.now() + ttlMs
-  });
+
+  // In-memory fallback — safety flush at 1000 entries
+  if (memCache.size > 1000) {
+    console.warn('⚠️ Memory Cache Limit Reached. Flushing.');
+    memCache.clear();
+  }
+  memCache.set(key, { data, expires: Date.now() + ttlSeconds * 1000 });
 };
 
-const clearDashboardCache = (businessId) => {
-  if (businessId) {
-    // Targeted invalidation: Only clear for the business that changed
-    for (const key of cache.keys()) {
-      if (key.includes(`:${businessId}`)) {
-        cache.delete(key);
-      }
+/**
+ * clearDashboardCache — async, Redis-first with in-memory fallback
+ * businessId: clears only that tenant's keys. Omit to clear all.
+ */
+const clearDashboardCache = async (businessId) => {
+  try {
+    if (isRedisEnabled && redisClient && redisClient.isReady) {
+      const pattern = businessId ? `dashboard:*:${businessId}*` : 'dashboard:*';
+      const keys = await redisClient.keys(pattern);
+      if (keys.length > 0) await redisClient.del(keys);
+      console.log(`⚡ Redis cache invalidated ${keys.length} key(s) ${businessId ? `for business: ${businessId}` : '(global)'}`);
+      return;
     }
-    console.log(`⚡ Dashboard cache invalidated for business: ${businessId}`);
-  } else {
-    cache.clear();
-    console.log('⚡ Global Dashboard cache cleared');
+  } catch (err) {
+    console.warn('⚠️ Redis DEL failed, clearing memory cache:', err.message);
   }
+
+  // In-memory fallback
+  if (businessId) {
+    for (const key of memCache.keys()) {
+      if (key.includes(`:${businessId}`)) memCache.delete(key);
+    }
+  } else {
+    memCache.clear();
+  }
+  console.log(`⚡ Memory cache invalidated ${businessId ? `for business: ${businessId}` : '(global)'}`);
 };
 
 // GET /api/dashboard/stats - Get dashboard statistics
@@ -63,7 +94,7 @@ router.get('/stats', catchAsync(async (req, res) => {
   
   try {
     // Try to get from cache first
-    let stats = getFromCache(cacheKey);
+    let stats = await getFromCache(cacheKey);
     
     if (!stats) {
       // Calculate stats from database
@@ -130,8 +161,8 @@ router.get('/stats', catchAsync(async (req, res) => {
         }
       };
       
-      // Cache for 5 minutes
-      setCache(cacheKey, stats, CACHE_TTL.stats);
+      // Cache result
+      await setCache(cacheKey, stats, CACHE_TTL.stats);
     }
     
     res.json({
@@ -156,7 +187,7 @@ router.get('/charts', catchAsync(async (req, res) => {
   const cacheKey = `dashboard:charts:${req.businessId}${isCustomDate ? `:${date_from}:${date_to}` : ''}`;
   
   try {
-    let chartData = getFromCache(cacheKey);
+    let chartData = await getFromCache(cacheKey);
     
     if (!chartData) {
       // Chart 1: Revenue Trend (Daily Sales)
@@ -192,8 +223,8 @@ router.get('/charts', catchAsync(async (req, res) => {
         expenses_by_category: expensesByCategory
       };
       
-      // Cache for 10 minutes
-      setCache(cacheKey, chartData, CACHE_TTL.charts);
+      // Cache result
+      await setCache(cacheKey, chartData, CACHE_TTL.charts);
     }
     
     res.json({

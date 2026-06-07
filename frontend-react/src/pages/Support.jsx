@@ -11,6 +11,7 @@ import {
   LifeBuoy
 } from 'lucide-react';
 import api from '../services/api';
+import { useSocket } from '../context/SocketContext';
 
 export default function Support() {
   const [tickets, setTickets] = useState([]);
@@ -26,10 +27,30 @@ export default function Support() {
 
   // Reply Form
   const [reply, setReply] = useState('');
+  
+  const socket = useSocket();
 
   useEffect(() => {
     fetchTickets();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleDataUpdate = (d) => {
+      if (d.type === 'support') {
+        fetchTickets();
+        if (selectedTicket) {
+          // Check if this update relates to the currently open ticket
+          const ticketIdToRefresh = d.data?.ticketId || selectedTicket.id;
+          if (ticketIdToRefresh === selectedTicket.id) {
+             fetchTicketDetail({ id: selectedTicket.id });
+          }
+        }
+      }
+    };
+    socket.on('data-update', handleDataUpdate);
+    return () => socket.off('data-update', handleDataUpdate);
+  }, [socket, selectedTicket]);
 
   const fetchTickets = async () => {
     try {

@@ -9,8 +9,8 @@ let pubClient = null;
 let subClient = null;
 let isRedisEnabled = false;
 
-if (redisUrl && redisUrl !== 'redis://localhost:6379') {
-  console.log('🌐 Redis URL detected, attempting connection...');
+if (redisUrl) {
+  console.log('🌐 Redis URL detected, enabling distributed caching...');
   client = createClient({ url: redisUrl });
   pubClient = createClient({ url: redisUrl });
   subClient = pubClient.duplicate();
@@ -21,7 +21,7 @@ if (redisUrl && redisUrl !== 'redis://localhost:6379') {
   
   isRedisEnabled = true;
 } else {
-  console.log('ℹ️ No production Redis URL found. Using In-Memory Caching (Default).');
+  console.log('ℹ️ No Redis URL found. Using In-Memory Caching (Development Fallback).');
 }
 
 const initRedis = async () => {
@@ -32,7 +32,7 @@ const initRedis = async () => {
       pubClient.connect(),
       subClient.connect()
     ]);
-    console.log('✅ Redis Cluster Connected');
+    console.log('✅ Redis Cluster Connected — Distributed Caching Active');
   } catch (err) {
     console.warn('⚠️ Redis Connection Failed. System will use local memory fallback.');
     isRedisEnabled = false;
@@ -46,3 +46,4 @@ module.exports = {
   initRedis,
   isRedisEnabled
 };
+

@@ -192,14 +192,26 @@ router.post('/support/tickets/:id/reply', auditLog('REPLY_SUPPORT_TICKET'), catc
     content: content.trim(),
     created_at: new Date().toISOString()
   });
-  await db('support_tickets').where({ id }).update({ status: 'in_progress', updated_at: new Date() });
+  await db('support_tickets').where({ id }).update({ status: 'in_progress', updated_at: new Date().toISOString() });
+  
+  // Broadcast to tenants
+  if (req.app.locals.broadcastDataChange) {
+    req.app.locals.broadcastDataChange('support', { ticketId: id });
+  }
+
   res.json({ success: true, message: 'Reply sent' });
 }));
 
 router.patch('/support/tickets/:id/status', auditLog('UPDATE_SUPPORT_TICKET_STATUS'), catchAsync(async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
-  await db('support_tickets').where({ id }).update({ status, updated_at: new Date() });
+  await db('support_tickets').where({ id }).update({ status, updated_at: new Date().toISOString() });
+  
+  // Broadcast to tenants
+  if (req.app.locals.broadcastDataChange) {
+    req.app.locals.broadcastDataChange('support', { ticketId: id });
+  }
+
   res.json({ success: true, message: `Ticket marked as ${status}` });
 }));
 

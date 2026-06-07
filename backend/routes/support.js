@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../config/database');
 const { catchAsync } = require('../middleware/errorHandler');
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * GET /api/support/tickets
@@ -26,23 +27,46 @@ router.post('/tickets', catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Subject and message are required' });
   }
 
-  const [ticket] = await db('support_tickets')
-    .insert({
-      business_id: req.businessId,
-      subject,
-      status: 'open',
-      priority: 'medium'
-    })
-    .returning('*');
+  const result = await db.transaction(async (trx) => {
+    const ticketId = uuidv4();
+    const [ticket] = await trx('support_tickets')
+      .insert({
+        id: ticketId,
+        business_id: req.businessId,
+        subject,
+        status: 'open',
+        priority: 'medium',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .returning('*');
 
-  await db('support_messages').insert({
-    ticket_id: ticket.id,
-    sender_id: req.user.uid,
-    sender_role: 'merchant',
-    content: message
+    const [msg] = await trx('support_messages').insert({
+      id: uuidv4(),
+      ticket_id: ticketId,
+      sender_id: req.user.uid,
+      sender_role: 'merchant',
+      content: message,
+      created_at: new Date().toISOString()
+    }).returning('*');
+
+    return { ticket, message: msg };
   });
 
-  res.status(201).json({ success: true, data: ticket });
+  // Notify admin
+  if (req.app.locals.adminNamespace) {
+    req.app.locals.adminNamespace.emit('adminAlert', {
+      type: 'newTicket',
+      data: {
+        message: `New support ticket: ${subject}`,
+        ticketId: result.ticket.id
+      }
+    });
+    // Trigger a data refresh for support queue
+    req.app.locals.adminNamespace.emit('data-refresh');
+  }
+
+  res.status(201).json({ success: true, data: result.ticket });
 }));
 
 /**
@@ -79,21 +103,39 @@ router.post('/tickets/:id/messages', catchAsync(async (req, res) => {
   
   if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 
-  const [message] = await db('support_messages')
-    .insert({
-      ticket_id: id,
-      sender_id: req.user.uid,
-      sender_role: 'merchant',
-      content
-    })
-    .returning('*');
+  const result = await db.transaction(async (trx) => {
+    const [message] = await trx('support_messages')
+      .insert({
+        id: uuidv4(),
+        ticket_id: id,
+        sender_id: req.user.uid,
+        sender_role: 'merchant',
+        content,
+        created_at: new Date().toISOString()
+      })
+      .returning('*');
 
-  // Mark ticket as open if it was resolved/closed
-  await db('support_tickets')
-    .where({ id })
-    .update({ status: 'open', updated_at: new Date() });
+    // Mark ticket as open if it was resolved/closed
+    await trx('support_tickets')
+      .where({ id })
+      .update({ status: 'open', updated_at: new Date().toISOString() });
+      
+    return message;
+  });
 
-  res.status(201).json({ success: true, data: message });
+  // Notify admin
+  if (req.app.locals.adminNamespace) {
+    req.app.locals.adminNamespace.emit('adminAlert', {
+      type: 'newTicketReply',
+      data: {
+        message: `New reply on ticket: ${ticket.subject}`,
+        ticketId: id
+      }
+    });
+    req.app.locals.adminNamespace.emit('data-refresh');
+  }
+
+  res.status(201).json({ success: true, data: result });
 }));
 
 module.exports = router;

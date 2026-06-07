@@ -34,11 +34,14 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import AdminNotifications from '../components/AdminNotifications';
+import { io } from 'socket.io-client';
 
 // Ensure API_BASE is absolute to prevent path drift in sub-routes
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').startsWith('http') 
   ? (import.meta.env.VITE_API_URL || '/api') 
   : `/${(import.meta.env.VITE_API_URL || 'api').replace(/^\//, '')}`;
+
+const SOCKET_URL = API_BASE.replace('/api', '');
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
@@ -120,6 +123,27 @@ export default function AdminDashboard() {
     if (currentUser) {
       fetchAdminData();
     }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    let socket;
+    const connectSocket = async () => {
+      const token = await currentUser.getIdToken();
+      socket = io(`${SOCKET_URL}/admin`, {
+        auth: { token },
+        transports: ['websocket', 'polling']
+      });
+
+      socket.on('data-refresh', () => {
+        refreshTickets();
+        fetchAdminData(); // refreshing the whole admin data silently
+      });
+    };
+    connectSocket();
+    return () => {
+      if (socket) socket.disconnect();
+    };
   }, [currentUser]);
 
   const handleLoginRedirect = () => {

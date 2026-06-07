@@ -191,7 +191,7 @@ app.get('/health', (req, res) => res.redirect('/api/health'));
 
 // Wire up app.locals so all route handlers can call cache invalidation and broadcast
 // clearDashboardCache now accepts an optional businessId for targeted invalidation
-app.locals.clearDashboardCache = (businessId) => clearDashboardCache(businessId);
+app.locals.clearDashboardCache = async (businessId) => await clearDashboardCache(businessId);
 app.locals.broadcastDataChange = (type, data) => {
   io.emit('data-update', { type, data });
 };
