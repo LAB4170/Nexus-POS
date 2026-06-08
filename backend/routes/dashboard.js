@@ -23,7 +23,13 @@ const getFromCache = async (key) => {
   try {
     if (isRedisEnabled && redisClient && redisClient.isReady) {
       const raw = await redisClient.get(key);
-      return raw ? JSON.parse(raw) : null;
+      if (raw) {
+        console.log(`⚡ Dashboard Redis Cache Hit: ${key}`);
+        return JSON.parse(raw);
+      } else {
+        console.log(`🔍 Dashboard Redis Cache Miss: ${key}`);
+        return null;
+      }
     }
   } catch (err) {
     console.warn('⚠️ Redis GET failed, falling back to memory:', err.message);
@@ -43,6 +49,7 @@ const setCache = async (key, data, ttlSeconds) => {
   try {
     if (isRedisEnabled && redisClient && redisClient.isReady) {
       await redisClient.setEx(key, ttlSeconds, JSON.stringify(data));
+      console.log(`🚀 Dashboard Redis Cache Set: ${key} (TTL: ${ttlSeconds}s)`);
       return;
     }
   } catch (err) {

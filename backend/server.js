@@ -146,33 +146,28 @@ app.use(express.urlencoded({ extended: true }));
 // Rate Limiters - Use RedisStore only if Redis is enabled
 const apiGeneralLimiter = rateLimit({ 
   windowMs: 15 * 60 * 1000, 
-  max: 1000,
-  store: isRedisEnabled ? new RedisStore({ sendCommand: (...args) => client.sendCommand(args) }) : undefined
+  max: 1000
 });
 
 const adminDashboardLimiter = rateLimit({ 
   windowMs: 1 * 60 * 1000, 
-  max: 60,
-  store: isRedisEnabled ? new RedisStore({ sendCommand: (...args) => client.sendCommand(args) }) : undefined
+  max: 60
 });
 
 const onboardingLimiter = rateLimit({ 
   windowMs: 60 * 60 * 1000, 
-  max: 20,
-  store: isRedisEnabled ? new RedisStore({ sendCommand: (...args) => client.sendCommand(args) }) : undefined
+  max: 20
 });
 
 const adminApiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 100, // limit each IP to 100 requests per windowMs
-  message: { success: false, message: 'Too many admin requests, please try again later.' },
-  store: isRedisEnabled ? new RedisStore({ sendCommand: (...args) => client.sendCommand(args) }) : undefined
+  message: { success: false, message: 'Too many admin requests, please try again later.' }
 });
 
 const paymentLimiter = rateLimit({ 
   windowMs: 5 * 60 * 1000, 
-  max: 50,
-  store: isRedisEnabled ? new RedisStore({ sendCommand: (...args) => client.sendCommand(args) }) : undefined
+  max: 50
 });
 
 app.get('/api/health', async (req, res) => {

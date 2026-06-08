@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
-import { setPersistence, browserSessionPersistence } from 'firebase/auth';
+import { setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { ShieldAlert, ArrowLeft, Sun, Moon, Eye, EyeOff, Lock } from 'lucide-react';
 
 export default function AdminLogin() {
@@ -20,7 +20,7 @@ export default function AdminLogin() {
     const checkAdmin = async () => {
       if (currentUser) {
         try {
-          const idTokenResult = await currentUser.getIdTokenResult();
+          const idTokenResult = await currentUser.getIdTokenResult(true);
           if (idTokenResult.claims.role === 'admin') {
             navigate('/admin');
           } else {
@@ -43,9 +43,10 @@ export default function AdminLogin() {
       setError('');
       setLoading(true);
 
-      // Force Session Persistence (Prevent Sync/Leaks across devices)
+      // Use local persistence — session survives page refresh.
+      // The 15-minute inactivity timer in AuthContext handles actual logout.
       if (auth) {
-        await setPersistence(auth, browserSessionPersistence);
+        await setPersistence(auth, browserLocalPersistence);
       }
 
       await loginWithEmail(email, password);
