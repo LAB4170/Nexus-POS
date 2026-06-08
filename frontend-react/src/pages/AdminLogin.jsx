@@ -1,67 +1,56 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useBusiness } from '../context/BusinessContext';
 import { useNavigate } from 'react-router-dom';
 import { setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { ShieldAlert, ArrowLeft, Sun, Moon, Eye, EyeOff, Lock } from 'lucide-react';
 
 export default function AdminLogin() {
-  const { currentUser, loginWithEmail, logout, auth } = useAuth();
+  const { currentUser, loginWithEmail, auth } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const { isAdmin, loadingBusiness } = useBusiness();
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError]           = useState('');
+  const [loading, setLoading]       = useState(false);
   const navigate = useNavigate();
-  
-  // Strict Admin Check
+
+  // ── Redirect once BusinessContext has confirmed admin status ───────────────
+  // We intentionally do NOT call logout() here.
+  // Non-admins are blocked at the AdminRoute level — they simply won't reach /admin.
   useEffect(() => {
-    const checkAdmin = async () => {
-      if (currentUser) {
-        try {
-          const idTokenResult = await currentUser.getIdTokenResult(true);
-          if (idTokenResult.claims.role === 'admin') {
-            navigate('/admin');
-          } else {
-            // Not an admin! Kick them out.
-            await logout();
-            setError('Access Denied: This account does not have administrator privileges.');
-          }
-        } catch (err) {
-          console.error('Admin verification failed:', err);
-          setError('Security verification failed. Please try again.');
-        }
-      }
-    };
-    checkAdmin();
-  }, [currentUser, navigate, logout]);
+    if (!loadingBusiness && currentUser && isAdmin) {
+      navigate('/admin', { replace: true });
+    }
+  }, [currentUser, isAdmin, loadingBusiness, navigate]);
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     try {
       setError('');
       setLoading(true);
-
-      // Use local persistence — session survives page refresh.
+      // Use local persistence so session survives page refreshes.
       // The 15-minute inactivity timer in AuthContext handles actual logout.
-      if (auth) {
-        await setPersistence(auth, browserLocalPersistence);
-      }
-
+      if (auth) await setPersistence(auth, browserLocalPersistence);
       await loginWithEmail(email, password);
-      // useEffect handles the role check and navigation
+      // Navigation happens in the useEffect above once BusinessContext resolves
     } catch (err) {
       console.error('Admin Login Error:', err);
-      setError('Invalid credentials or connection error.');
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found') {
+        setError('Invalid email or password. Please try again.');
+      } else {
+        setError('Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="login-page admin-login-bg" style={{ 
-      position: 'relative', 
+    <div className="login-page admin-login-bg" style={{
+      position: 'relative',
       background: isDarkMode ? '#020617' : '#f8fafc',
       minHeight: '100vh',
       display: 'flex',
@@ -92,8 +81,8 @@ export default function AdminLogin() {
         </button>
       </div>
 
-      <div className="login-card glass" style={{ 
-        maxWidth: '400px', 
+      <div className="login-card glass" style={{
+        maxWidth: '400px',
         width: '90%',
         padding: '2.5rem',
         borderRadius: '1.5rem',
@@ -101,7 +90,7 @@ export default function AdminLogin() {
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
       }}>
         <div className="login-header" style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ 
+          <div style={{
             width: '64px', height: '64px', borderRadius: '1rem',
             background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -185,7 +174,7 @@ export default function AdminLogin() {
             style={{
               width: '100%', padding: '0.75rem', borderRadius: '0.5rem',
               background: '#ef4444', color: 'white', fontWeight: 700,
-              border: 'none', cursor: 'pointer',
+              border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
               opacity: loading ? 0.7 : 1
             }}
